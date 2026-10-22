@@ -44,7 +44,15 @@ export default function TeacherLessonsPage() {
             пока не реализовано.
           </p>
         </div>
-
+        <div className="mt-6">
+          <Link
+            href="/teacher/lessons/new"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-700 px-5 py-3 font-semibold text-white transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700"
+          >
+            Начать занятие
+          </Link>
+        </div>
+        
         <ul className="mt-8 space-y-4">
           {mockLessons.map((lesson) => (
             <li
