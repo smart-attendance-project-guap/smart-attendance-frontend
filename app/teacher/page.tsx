@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function TeacherPage() {
   return (
     <main
@@ -27,6 +29,15 @@ export default function TeacherPage() {
             пока не реализованы. Реальные данные не используются.
           </p>
         </div>
+
+        <nav aria-label="Разделы кабинета" className="mt-8">
+          <Link
+            href="/teacher/lessons"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-700 px-5 py-3 font-semibold text-white transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700"
+          >
+            Мои занятия
+          </Link>
+        </nav>
       </div>
     </main>
   );
