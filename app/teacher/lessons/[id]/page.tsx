@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { mockLessons } from "../mock-lessons";
+import AttendanceTable from "../attendance-table";
+import { mockAttendance } from "../mock-attendance";
 
 export const instant = false;
 
@@ -70,6 +72,8 @@ export default async function TeacherLessonPage({
               <dd className="mt-1 font-medium">{lesson.group}</dd>
             </div>
 
+            
+
             <div>
               <dt className="text-sm text-slate-500">Аудитория</dt>
               <dd className="mt-1 font-medium">{lesson.classroom}</dd>
@@ -84,10 +88,25 @@ export default async function TeacherLessonPage({
               <dt className="text-sm text-slate-500">Время</dt>
               <dd className="mt-1 font-medium">
                 {lesson.startTime}–{lesson.endTime}
+                
               </dd>
             </div>
           </dl>
         </section>
+        <section className="mt-8 rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+  <h2 className="text-xl font-semibold">Посещаемость</h2>
+
+  <p className="mt-2 text-sm leading-6 text-slate-600">
+    Демонстрационные данные. Обновление в реальном времени
+    и обработка отметок пока не подключены.
+  </p>
+
+  <AttendanceTable
+    attendance={mockAttendance.filter(
+      (item) => item.lessonId === lesson.id
+    )}
+  />
+</section>
       </div>
     </main>
   );
