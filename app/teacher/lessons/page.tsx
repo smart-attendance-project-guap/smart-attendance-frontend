@@ -94,6 +94,12 @@ export default function TeacherLessonsPage() {
                   </dd>
                 </div>
               </dl>
+              <Link
+  href={`/teacher/lessons/${lesson.id}`}
+  className="mt-5 inline-flex min-h-11 items-center rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+>
+  Открыть занятие
+</Link>
             </li>
           ))}
         </ul>
