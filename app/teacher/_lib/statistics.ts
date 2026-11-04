@@ -1,3 +1,4 @@
+import { getLessons } from "./lessons";
 import { API_URL, clearTeacherToken, getTeacherToken } from "./auth";
 
 export type AttendanceTotals = {
@@ -8,7 +9,7 @@ export type AttendanceTotals = {
 export type TeacherSummary = AttendanceTotals & { totalLessons: number };
 export type GroupStatistics = TeacherSummary & { groupId: number; groupName: string };
 export type LessonStatistics = AttendanceTotals & {
-  lessonId: number; startsAt: string; endsAt: string;
+  discipline?: string; lessonId: number; startsAt: string; endsAt: string;
   group: { id: number; name: string };
   classroom: { id: number; name: string };
 };
@@ -60,8 +61,8 @@ async function request(path: string, token: string, signal: AbortSignal): Promis
 export async function getTeacherStatistics(signal: AbortSignal): Promise<TeacherStatistics> {
   const token = getTeacherToken();
   if (!token) { window.location.replace("/teacher-login"); throw new Error("Войдите снова."); }
-  const [overall, byGroup, byLesson] = await Promise.all([
-    request("stats", token, signal), request("groups/stats", token, signal), request("lessons/stats", token, signal),
+  const [overall, byGroup, byLesson, lessons] = await Promise.all([
+    request("stats", token, signal), request("groups/stats", token, signal), request("lessons/stats", token, signal), getLessons(signal),
   ]);
   if (!summary(overall) || !record(byGroup) || !Array.isArray(byGroup.stats) || !byGroup.stats.every(group)
     || !record(byLesson) || !Array.isArray(byLesson.stats) || !byLesson.stats.every(lesson)) {
@@ -70,6 +71,55 @@ export async function getTeacherStatistics(signal: AbortSignal): Promise<Teacher
   return {
     summary: overall,
     groups: [...byGroup.stats].sort((a, b) => a.groupName.localeCompare(b.groupName, "ru")),
-    lessons: [...byLesson.stats].sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt)),
+    lessons: byLesson.stats.map(item => {
+      const source = lessons.find(lesson => lesson.id === item.lessonId);
+      if (!source) throw new Error("Список занятий изменился. Обновите статистику.");
+      return { ...item, discipline: typeof source.discipline === "string" && source.discipline.trim() ? source.discipline : "Без дисциплины" };
+    }).sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt)),
   };
+}
+
+
+export type StatisticsFilters = { groupId: string; discipline: string; from: string; to: string };
+export const EMPTY_STATISTICS_FILTERS: StatisticsFilters = { groupId: "", discipline: "", from: "", to: "" };
+
+// Дата начала занятия в часовом поясе устройства, без сдвига даты через UTC.
+export function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function filterTeacherStatistics(data: TeacherStatistics, filters: StatisticsFilters): TeacherStatistics {
+  if (!Object.values(filters).some(Boolean)) return data;
+  const lessons = filters.from && filters.to && filters.from > filters.to ? [] : data.lessons.filter(lesson => {
+    const day = localDateKey(new Date(lesson.startsAt));
+    return (!filters.groupId || String(lesson.group.id) === filters.groupId)
+      && (!filters.discipline || lesson.discipline === filters.discipline)
+      && (!filters.from || day >= filters.from) && (!filters.to || day <= filters.to);
+  });
+  const summary: TeacherSummary = { totalLessons: lessons.length, totalStudents: 0, attendedStudents: 0, attendancePercentage: 0 };
+  const groups = new Map<number, GroupStatistics>();
+  for (const lesson of lessons) {
+    summary.totalStudents += lesson.totalStudents;
+    summary.attendedStudents += lesson.attendedStudents;
+    const group = groups.get(lesson.group.id) ?? { groupId: lesson.group.id, groupName: lesson.group.name, totalLessons: 0, totalStudents: 0, attendedStudents: 0, attendancePercentage: 0 };
+    group.totalLessons++;
+    group.totalStudents += lesson.totalStudents;
+    group.attendedStudents += lesson.attendedStudents;
+    groups.set(group.groupId, group);
+  }
+  const rate = (totals: AttendanceTotals) => totals.totalStudents ? Number((totals.attendedStudents / totals.totalStudents * 100).toFixed(2)) : 0;
+  summary.attendancePercentage = rate(summary);
+  for (const group of groups.values()) group.attendancePercentage = rate(group);
+  return { summary, lessons, groups: [...groups.values()].sort((a, b) => a.groupName.localeCompare(b.groupName, "ru")) };
+}
+
+
+export function academicYearStart(date: Date): number {
+  return date.getMonth() >= 8 ? date.getFullYear() : date.getFullYear() - 1;
+}
+
+export function semesterDates(year: number, semester: 1 | 2): { from: string; to: string } {
+  return semester === 1
+    ? { from: `${year}-09-01`, to: `${year + 1}-01-31` }
+    : { from: `${year + 1}-02-01`, to: `${year + 1}-08-31` };
 }
