@@ -16,19 +16,9 @@ export default function TeacherPage() {
         </h1>
 
         <p className="mt-4 max-w-2xl leading-7 text-slate-600">
-          Здесь будут ваши занятия, посещаемость студентов
+          Ваши занятия, посещаемость студентов
           и отметки, требующие проверки.
         </p>
-
-        <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5">
-          <p className="font-semibold text-amber-900">
-            Демонстрационный интерфейс
-          </p>
-          <p className="mt-2 text-sm leading-6 text-amber-800">
-            Подключение к Backend и проверка роли преподавателя
-            пока не реализованы. Реальные данные не используются.
-          </p>
-        </div>
 
         <nav aria-label="Разделы кабинета" className="mt-8">
           <Link
