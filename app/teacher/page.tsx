@@ -20,12 +20,15 @@ export default function TeacherPage() {
           и отметки, требующие проверки.
         </p>
 
-        <nav aria-label="Разделы кабинета" className="mt-8">
+        <nav aria-label="Разделы кабинета" className="mt-8 flex flex-wrap gap-3">
           <Link
             href="/teacher/lessons"
             className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-700 px-5 py-3 font-semibold text-white transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700"
           >
             Мои занятия
+          </Link>
+          <Link href="/teacher/statistics" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-blue-700 px-5 py-3 font-semibold text-blue-700 hover:bg-blue-50">
+            Статистика
           </Link>
         </nav>
       </div>
