@@ -26,7 +26,7 @@ type Attendance = {
     title?: string;
     subject?: string;
     name?: string;
-    discipline?: string;
+    discipline?: string | null;
     startsAt?: string;
     date?: string;
     startTime?: string;
@@ -39,11 +39,42 @@ type Attendance = {
   };
 };
 
+type MissedLesson = {
+  id: number;
+  discipline: string | null;
+  startsAt: string;
+  endsAt: string;
+  finishedAt: string;
+  group: {
+    id: number;
+    name: string;
+  };
+  classroom: {
+    id: number;
+    name: string;
+  };
+};
+
+type HistoryEntry =
+  | {
+      type: "attendance";
+      key: string;
+      attendance: Attendance;
+      sortDate: string;
+    }
+  | {
+      type: "missed";
+      key: string;
+      lesson: MissedLesson;
+      sortDate: string;
+    };
+
 const statusLabels: Record<string, string> = {
   PRESENT: "Посещение засчитано",
   LATE: "Опоздание",
   REJECTED: "Отметка отклонена",
   PENDING: "Ожидает подтверждения",
+  MISSED: "Пропуск",
 };
 
 const statusStyles: Record<string, string> = {
@@ -51,6 +82,7 @@ const statusStyles: Record<string, string> = {
   LATE: "bg-amber-100 text-amber-700",
   REJECTED: "bg-rose-100 text-rose-700",
   PENDING: "bg-indigo-100 text-indigo-700",
+  MISSED: "bg-slate-100 text-slate-700",
 };
 
 function formatDate(value: string) {
@@ -77,7 +109,7 @@ function formatTime(value: string) {
 }
 
 export default function StudentHistoryPage() {
-  const [attendances, setAttendances] = useState<Attendance[]>([]);
+  const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [groupName, setGroupName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -129,34 +161,103 @@ export default function StudentHistoryPage() {
 
         const token = getStudentToken();
 
-        const response = await fetch(
-          `${API_URL}/api/attendance/history`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+        const headers = {
+          Authorization: `Bearer ${token}`,
+        };
+
+        const [historyResponse, missedResponse] = await Promise.all([
+          fetch(`${API_URL}/api/attendance/history`, {
+            headers,
             cache: "no-store",
             signal: controller.signal,
-          }
-        );
+          }),
+          fetch(`${API_URL}/api/attendance/missed`, {
+            headers,
+            cache: "no-store",
+            signal: controller.signal,
+          }),
+        ]);
 
-        if (response.status === 401 || response.status === 403) {
+        if (
+          historyResponse.status === 401 ||
+          historyResponse.status === 403 ||
+          missedResponse.status === 401 ||
+          missedResponse.status === 403
+        ) {
           clearStudentToken();
           window.location.replace("/student/login");
           return;
         }
 
-        const data = await response.json();
+        const [historyData, missedData] = await Promise.all([
+          historyResponse.json(),
+          missedResponse.json(),
+        ]);
 
-        if (!response.ok) {
+        if (!historyResponse.ok) {
           throw new Error(
-            data.message || "Не удалось загрузить историю посещаемости."
+            historyData.message ||
+              "Не удалось загрузить историю посещаемости."
           );
         }
 
-        setAttendances(
-          Array.isArray(data.attendances) ? data.attendances : []
+        if (!missedResponse.ok) {
+          throw new Error(
+            missedData.message ||
+              "Не удалось загрузить пропущенные занятия."
+          );
+        }
+
+        const attendances: Attendance[] = Array.isArray(
+          historyData.attendances
+        )
+          ? historyData.attendances
+          : [];
+
+        const missedLessons: MissedLesson[] = Array.isArray(
+          missedData.missedLessons
+        )
+          ? missedData.missedLessons
+          : [];
+
+        // Существующие отметки имеют приоритет.
+        // Исключаем пропущенные занятия, если их lesson.id
+        // уже присутствует в истории посещаемости.
+        const attendanceLessonIds = new Set(
+          attendances.map((attendance) => attendance.lesson.id)
         );
+
+        const attendanceEntries: HistoryEntry[] = attendances.map(
+          (attendance) => ({
+            type: "attendance",
+            key: `attendance-${attendance.id}`,
+            attendance,
+            sortDate:
+              attendance.lesson.startsAt ||
+              attendance.lesson.date ||
+              attendance.markedAt,
+          })
+        );
+
+        const missedEntries: HistoryEntry[] = missedLessons
+          .filter((lesson) => !attendanceLessonIds.has(lesson.id))
+          .map((lesson) => ({
+            type: "missed",
+            key: `missed-${lesson.id}`,
+            lesson,
+            sortDate: lesson.startsAt,
+          }));
+
+        const combinedEntries = [
+          ...attendanceEntries,
+          ...missedEntries,
+        ].sort(
+          (a, b) =>
+            new Date(b.sortDate).getTime() -
+            new Date(a.sortDate).getTime()
+        );
+
+        setEntries(combinedEntries);
       } catch (cause) {
         if (
           cause instanceof DOMException &&
@@ -226,18 +327,66 @@ export default function StudentHistoryPage() {
           >
             {error}
           </div>
-        ) : attendances.length === 0 ? (
+        ) : entries.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
             <p className="text-lg font-semibold">
               История пока пуста
             </p>
             <p className="mt-2 text-sm text-slate-500">
-              Здесь появятся занятия после отметки посещаемости.
+              Здесь появятся занятия после отметки посещаемости или пропуска.
             </p>
           </div>
         ) : (
           <section className="space-y-4">
-            {attendances.map((attendance) => {
+            {entries.map((entry) => {
+              if (entry.type === "missed") {
+                const lesson = entry.lesson;
+
+                const subject =
+                  lesson.discipline || "Учебное занятие";
+
+                return (
+                  <article
+                    key={entry.key}
+                    className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6"
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold">
+                          {subject}
+                        </h2>
+
+                        <p className="mt-2 text-sm text-slate-500">
+                          Дата занятия: {formatDate(lesson.startsAt)}
+                          {` · ${formatTime(lesson.startsAt)}`}
+                        </p>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          Время окончания: {formatTime(lesson.endsAt)}
+                        </p>
+
+                        {lesson.classroom?.name && (
+                          <p className="mt-2 text-sm text-slate-500">
+                            Аудитория: {lesson.classroom.name}
+                          </p>
+                        )}
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          Группа: {lesson.group?.name || groupName || "Не указана"}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`w-fit rounded-full px-3 py-1.5 text-sm font-medium ${statusStyles.MISSED}`}
+                      >
+                        {statusLabels.MISSED}
+                      </span>
+                    </div>
+                  </article>
+                );
+              }
+
+              const attendance = entry.attendance;
               const lesson = attendance.lesson;
 
               const subject =
@@ -252,7 +401,7 @@ export default function StudentHistoryPage() {
 
               return (
                 <article
-                  key={attendance.id}
+                  key={entry.key}
                   className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -309,9 +458,9 @@ export default function StudentHistoryPage() {
           </section>
         )}
 
-        {!loading && !error && attendances.length > 0 && (
+        {!loading && !error && entries.length > 0 && (
           <p className="mt-6 text-sm text-slate-500">
-            Всего записей: {attendances.length}
+            Всего занятий: {entries.length}
           </p>
         )}
       </div>
