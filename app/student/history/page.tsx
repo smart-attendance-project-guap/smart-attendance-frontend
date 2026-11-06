@@ -6,9 +6,15 @@ import Link from "next/link";
 import {
   API_URL,
   getStudentToken,
+  getStudentUser,
   verifyStudent,
   clearStudentToken,
 } from "../_lib/auth";
+
+type Group = {
+  id: number;
+  name: string;
+};
 
 type Attendance = {
   id: number;
@@ -20,6 +26,7 @@ type Attendance = {
     title?: string;
     subject?: string;
     name?: string;
+    discipline?: string;
     startsAt?: string;
     date?: string;
     startTime?: string;
@@ -71,6 +78,7 @@ function formatTime(value: string) {
 
 export default function StudentHistoryPage() {
   const [attendances, setAttendances] = useState<Attendance[]>([]);
+  const [groupName, setGroupName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -85,6 +93,38 @@ export default function StudentHistoryPage() {
           clearStudentToken();
           window.location.replace("/student/login");
           return;
+        }
+
+        const user = getStudentUser();
+
+        if (user?.groupId) {
+          try {
+            const groupsResponse = await fetch(
+              `${API_URL}/api/registration/groups`,
+              {
+                cache: "no-store",
+                signal: controller.signal,
+              }
+            );
+
+            if (groupsResponse.ok) {
+              const groupsData = await groupsResponse.json();
+              const groups: Group[] = groupsData.groups || [];
+
+              const studentGroup = groups.find(
+                (group) => group.id === user.groupId
+              );
+
+              setGroupName(studentGroup?.name || "");
+            }
+          } catch (cause) {
+            if (
+              cause instanceof DOMException &&
+              cause.name === "AbortError"
+            ) {
+              return;
+            }
+          }
         }
 
         const token = getStudentToken();
@@ -164,6 +204,15 @@ export default function StudentHistoryPage() {
           <p className="mt-2 text-slate-500">
             Список занятий и результаты отметок.
           </p>
+
+          <div className="mt-4 inline-flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-4 py-2">
+            <span className="text-sm text-slate-500">
+              Учебная группа
+            </span>
+            <span className="text-sm font-semibold text-indigo-700">
+              {groupName || "Не указана"}
+            </span>
+          </div>
         </header>
 
         {loading ? (
@@ -190,7 +239,9 @@ export default function StudentHistoryPage() {
           <section className="space-y-4">
             {attendances.map((attendance) => {
               const lesson = attendance.lesson;
+
               const subject =
+                lesson.discipline ||
                 lesson.title ||
                 lesson.subject ||
                 lesson.name ||
@@ -198,9 +249,6 @@ export default function StudentHistoryPage() {
 
               const dateValue =
                 lesson.startsAt || lesson.date || attendance.markedAt;
-
-              const timeValue =
-                lesson.startsAt || attendance.markedAt;
 
               return (
                 <article
@@ -214,9 +262,14 @@ export default function StudentHistoryPage() {
                       </h2>
 
                       <p className="mt-2 text-sm text-slate-500">
-                        {formatDate(dateValue)}
-                        {formatTime(timeValue) &&
-                          ` · ${formatTime(timeValue)}`}
+                        Дата занятия: {formatDate(dateValue)}
+                        {lesson.startsAt &&
+                          ` · ${formatTime(lesson.startsAt)}`}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        Время отметки: {formatDate(attendance.markedAt)}
+                        {` · ${formatTime(attendance.markedAt)}`}
                       </p>
 
                       {lesson.classroom?.name && (
@@ -225,11 +278,9 @@ export default function StudentHistoryPage() {
                         </p>
                       )}
 
-                      {lesson.group?.name && (
-                        <p className="mt-1 text-sm text-slate-500">
-                          Группа: {lesson.group.name}
-                        </p>
-                      )}
+                      <p className="mt-1 text-sm text-slate-500">
+                        Группа: {lesson.group?.name || groupName || "Не указана"}
+                      </p>
                     </div>
 
                     <span

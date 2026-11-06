@@ -20,16 +20,22 @@ type AttendanceStats = {
   attendancePercentage: number;
 };
 
+type Group = {
+  id: number;
+  name: string;
+};
+
 export default function StudentPage() {
   const [stats, setStats] = useState<AttendanceStats | null>(null);
   const [user, setUser] = useState<StudentUser | null>(null);
+  const [groupName, setGroupName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
 
-    async function loadStats() {
+    async function loadPage() {
       try {
         const authorized = await verifyStudent(controller.signal);
 
@@ -39,7 +45,37 @@ export default function StudentPage() {
           return;
         }
 
-        setUser(getStudentUser());
+        const currentUser = getStudentUser();
+        setUser(currentUser);
+
+        if (currentUser?.groupId) {
+          try {
+            const groupsResponse = await fetch(
+              `${API_URL}/api/registration/groups`,
+              {
+                cache: "no-store",
+                signal: controller.signal,
+              }
+            );
+
+            if (groupsResponse.ok) {
+              const groupsData = await groupsResponse.json();
+              const groups: Group[] = groupsData.groups || [];
+              const studentGroup = groups.find(
+                (group) => group.id === currentUser.groupId
+              );
+
+              setGroupName(studentGroup?.name || "");
+            }
+          } catch (cause) {
+            if (
+              cause instanceof DOMException &&
+              cause.name === "AbortError"
+            ) {
+              return;
+            }
+          }
+        }
 
         const token = getStudentToken();
 
@@ -62,18 +98,21 @@ export default function StudentPage() {
         if (!response.ok) {
           if (data.message === "Student is not assigned to a group") {
             throw new Error(
-              "Ваш аккаунт пока не привязан к учебной группе. Обратитесь к администратору."
+              "Ваш аккаунт пока не привязан к учебной группе."
             );
           }
 
           throw new Error(
-            "Не удалось загрузить статистику. Попробуйте позже."
+            data.message || "Не удалось загрузить статистику. Попробуйте позже."
           );
         }
 
         setStats(data);
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError") {
+        if (
+          cause instanceof DOMException &&
+          cause.name === "AbortError"
+        ) {
           return;
         }
 
@@ -89,7 +128,7 @@ export default function StudentPage() {
       }
     }
 
-    loadStats();
+    loadPage();
 
     return () => controller.abort();
   }, []);
@@ -114,11 +153,17 @@ export default function StudentPage() {
 
             <p className="mt-2 text-slate-500">
               Добро пожаловать,{" "}
-              {user
-                ? `${user.firstName} ${user.lastName}`
-                : "студент"}
-              !
+              {user ? `${user.firstName} ${user.lastName}` : "студент"}!
             </p>
+
+            <div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-4 py-2">
+              <span className="text-sm text-slate-500">
+                Учебная группа
+              </span>
+              <span className="text-sm font-semibold text-indigo-700">
+                {groupName || (user?.groupId ? "Загрузка…" : "Не указана")}
+              </span>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -180,7 +225,6 @@ export default function StudentPage() {
                 <p className="text-sm text-slate-500">
                   Посещено занятий
                 </p>
-
                 <p className="mt-3 text-4xl font-bold text-emerald-600">
                   {stats.attendedLessons}
                 </p>
@@ -190,7 +234,6 @@ export default function StudentPage() {
                 <p className="text-sm text-slate-500">
                   Пропущено занятий
                 </p>
-
                 <p className="mt-3 text-4xl font-bold text-rose-600">
                   {stats.missedLessons}
                 </p>
@@ -200,7 +243,6 @@ export default function StudentPage() {
                 <p className="text-sm text-slate-500">
                   Отклонённые отметки
                 </p>
-
                 <p className="mt-3 text-4xl font-bold text-amber-600">
                   {stats.rejectedLessons}
                 </p>
@@ -214,10 +256,7 @@ export default function StudentPage() {
             href="/student/attendance"
             className="rounded-2xl bg-slate-900 p-5 text-white transition hover:bg-slate-700"
           >
-            <h2 className="font-semibold">
-              Отметить посещение
-            </h2>
-
+            <h2 className="font-semibold">Отметить посещение</h2>
             <p className="mt-2 text-sm text-slate-300">
               Перейти к отметке по QR-коду
             </p>
@@ -227,10 +266,7 @@ export default function StudentPage() {
             href="/student/history"
             className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:bg-slate-100"
           >
-            <h2 className="font-semibold">
-              История посещаемости
-            </h2>
-
+            <h2 className="font-semibold">История посещаемости</h2>
             <p className="mt-2 text-sm text-slate-500">
               Посмотреть посещённые и пропущенные занятия
             </p>
