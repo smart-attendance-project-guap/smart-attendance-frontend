@@ -1,8 +1,9 @@
 
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import QrScanner from "./QrScanner";
+import { markAttendanceByQr } from "./markAttendance";
 
 type LocationState = "idle" | "loading" | "success" | "error";
 
@@ -14,11 +15,39 @@ export default function StudentAttendancePage() {
     "Местоположение ещё не запрашивалось."
   );
 
-  const [qrValue, setQrValue] = useState("");
+
+  const [markState, setMarkState] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+
+  const [markMessage, setMarkMessage] = useState("");
+  const markingRef = useRef(false);
 
   const handleQrScan = useCallback((value: string) => {
-    setQrValue(value);
+    if (markingRef.current) return;
+
+    markingRef.current = true;
+    setMarkState("loading");
+    setMarkMessage("Проверяем QR-код на сервере…");
+
+    void markAttendanceByQr(value)
+      .then((message) => {
+        setMarkState("success");
+        setMarkMessage(message);
+      })
+      .catch((error: unknown) => {
+        setMarkState("error");
+        setMarkMessage(
+          error instanceof Error
+            ? error.message
+            : "Не удалось отметить посещение."
+        );
+      })
+      .finally(() => {
+        markingRef.current = false;
+      });
   }, []);
+
 
   function requestLocation() {
     if (!navigator.geolocation) {
@@ -36,7 +65,7 @@ export default function StudentAttendancePage() {
       () => {
         setLocationState("success");
         setLocationMessage(
-          "Координаты получены. Проверка допустимой зоны выполняется Backend."
+          "Геолокация работает. Передача координат на сервер пока не подключена."
         );
       },
       (error) => {
@@ -103,22 +132,28 @@ export default function StudentAttendancePage() {
             Наведи камеру на QR-код преподавателя.
           </p>
 
-          {qrValue && (
-            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="font-semibold text-emerald-800">
-                QR-код считан
-              </p>
 
-              <p className="mt-2 break-all text-sm text-emerald-700">
-                {qrValue}
+          {markState !== "idle" && (
+            <div
+              role="status"
+              className={`mt-4 rounded-xl border p-4 ${markState === "success"
+                ? "border-green-200 bg-green-50 text-green-800"
+                : markState === "error"
+                  ? "border-red-200 bg-red-50 text-red-800"
+                  : "border-blue-200 bg-blue-50 text-blue-800"
+                }`}
+            >
+              <p className="font-semibold">
+                {markState === "loading"
+                  ? "Проверяем QR-код"
+                  : markState === "success"
+                    ? "Отметка создана"
+                    : "Не удалось отметить посещение"}
               </p>
-
-              <p className="mt-2 text-sm text-emerald-700">
-                Это только результат считывания. Подлинность QR
-                и посещение ещё не подтверждены Backend.
-              </p>
+              <p className="mt-2 text-sm">{markMessage}</p>
             </div>
           )}
+
 
           <div className="my-7 border-t border-slate-200" />
 
@@ -128,7 +163,7 @@ export default function StudentAttendancePage() {
 
           <p className="mt-2 text-sm text-slate-500">
             Координаты запрашиваются только после нажатия кнопки.
-            Проверку допустимой зоны выполняет сервер.
+            Сейчас проверяется доступ к геолокации, без отправки данных на сервер.
           </p>
 
           {locationState !== "success" && (
@@ -147,22 +182,22 @@ export default function StudentAttendancePage() {
           <p
             role="status"
             aria-live="polite"
-            className={`mt-3 text-sm ${
-              locationState === "error"
-                ? "text-rose-600"
-                : locationState === "success"
-                  ? "text-emerald-700"
-                  : "text-slate-500"
-            }`}
+            className={`mt-3 text-sm ${locationState === "error"
+              ? "text-rose-600"
+              : locationState === "success"
+                ? "text-emerald-700"
+                : "text-slate-500"
+              }`}
           >
             {locationMessage}
           </p>
         </section>
 
         <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          Серверная проверка QR, отправка координат и подтверждение
-          посещения пока не подключены. Считывание QR само по себе
-          не засчитывает занятие.
+          После сканирования QR-код проверяется сервером.
+          При успешной проверке создаётся отметка со статусом PENDING,
+          которую должен подтвердить преподаватель.
+          Проверка геолокации и автоматическое подтверждение пока не подключены.
         </div>
       </div>
     </main>
