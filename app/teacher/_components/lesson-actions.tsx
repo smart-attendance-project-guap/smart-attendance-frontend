@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { finishLesson, generateQr } from "../_lib/lesson-actions";
 
-const buttonStyle = "min-h-11 rounded-lg bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500";
+const buttonStyle = "min-h-11 rounded-lg bg-[#9668BD] px-5 py-3 font-semibold text-white transition-colors hover:bg-[#8052A8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A7E8] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500";
 
 export default function LessonActions({ id, finishedAt, onFinished }: { id: number; finishedAt: string | null; onFinished: (at: string) => void }) {
   const [enabled, setEnabled] = useState(false);

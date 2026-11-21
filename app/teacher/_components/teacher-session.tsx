@@ -1,10 +1,35 @@
+
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { clearTeacherToken, verifyTeacher } from "../_lib/auth";
 
-export default function TeacherSession({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+const TeacherLogoutContext = createContext<(() => void) | null>(null);
+
+export function useTeacherLogout() {
+  const logout = useContext(TeacherLogoutContext);
+
+  if (!logout) {
+    throw new Error("useTeacherLogout должен использоваться внутри TeacherSession");
+  }
+
+  return logout;
+}
+
+export default function TeacherSession({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    "loading"
+  );
   const [attempt, setAttempt] = useState(0);
 
   function logout() {
@@ -15,28 +40,40 @@ export default function TeacherSession({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     let current: AbortController | undefined;
+
     async function check() {
       current?.abort();
+
       const controller = new AbortController();
       current = controller;
+
       const timeout = setTimeout(() => controller.abort(), 15000);
+
       try {
         const valid = await verifyTeacher(controller.signal);
+
         if (!active || current !== controller) return;
+
         if (!valid) {
           clearTeacherToken();
           window.location.replace("/teacher-login");
           return;
         }
+
         setStatus("ready");
       } catch {
-        if (active && current === controller) setStatus("error");
+        if (active && current === controller) {
+          setStatus("error");
+        }
       } finally {
         clearTimeout(timeout);
       }
     }
+
     void check();
+
     window.addEventListener("focus", check);
+
     return () => {
       active = false;
       current?.abort();
@@ -45,16 +82,36 @@ export default function TeacherSession({ children }: { children: ReactNode }) {
   }, [attempt]);
 
   if (status !== "ready") {
-    return <main lang="ru" className="min-h-screen bg-slate-50 p-6 text-slate-900">
-      <p role="status">{status === "loading" ? "Проверяем вход…" : "Не удалось связаться с Backend. Проверьте, что сервер запущен."}</p>
-      {status === "error" && <button className="mt-4 min-h-11 rounded-lg bg-blue-700 px-4 py-2 text-white" onClick={() => { setStatus("loading"); setAttempt(attempt + 1); }}>Повторить</button>}
-    </main>;
+    return (
+      <main
+        lang="ru"
+        className="min-h-screen bg-[#F7F5F8] p-6 text-[#171717]"
+      >
+        <p role="status">
+          {status === "loading"
+            ? "Проверяем вход…"
+            : "Не удалось связаться с Backend. Проверьте, что сервер запущен."}
+        </p>
+
+        {status === "error" && (
+          <button
+            type="button"
+            className="mt-4 min-h-11 rounded-lg bg-[#9B6BC0] px-5 py-2 font-semibold text-white transition hover:bg-[#8756AD]"
+            onClick={() => {
+              setStatus("loading");
+              setAttempt((previous) => previous + 1);
+            }}
+          >
+            Повторить
+          </button>
+        )}
+      </main>
+    );
   }
 
-  return <>
-    <div lang="ru" className="flex justify-end border-b border-slate-200 bg-white px-6 py-2">
-      <button onClick={logout} className="min-h-11 rounded-lg px-4 py-2 font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-700">Выйти</button>
-    </div>
-    {children}
-  </>;
+  return (
+    <TeacherLogoutContext.Provider value={logout}>
+      {children}
+    </TeacherLogoutContext.Provider>
+  );
 }
