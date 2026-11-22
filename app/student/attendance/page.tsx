@@ -5,6 +5,11 @@ import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import QrScanner from "./QrScanner";
 import { markAttendanceByQr } from "./markAttendance";
+import {
+  registerStudentDevice,
+  verifyAttendanceDevice,
+  verifyAttendanceLocation,
+} from "./deviceChecks";
 
 type LocationState = "idle" | "loading" | "success" | "error";
 
@@ -84,20 +89,40 @@ export default function StudentAttendancePage() {
 
   const [qrState, setQrState] = useState<QrState>("idle");
   const [qrMessage, setQrMessage] = useState("");
+  const [attendanceId, setAttendanceId] = useState<number | null>(null);
+  const [deviceState, setDeviceState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [deviceMessage, setDeviceMessage] = useState("Устройство ещё не подтверждено.");
+  const [registrationState, setRegistrationState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const scanRequestInProgress = useRef(false);
 
   const handleQrScan = useCallback(async (value: string) => {
     if (scanRequestInProgress.current) return;
 
     scanRequestInProgress.current = true;
+    setAttendanceId(null);
+    setDeviceState("idle");
+    setDeviceMessage("Устройство ещё не подтверждено.");
+    setLocationState("idle");
+    setLocationMessage("Местоположение ещё не запрашивалось.");
     setQrState("loading");
     setQrMessage("Проверяем QR-код и отправляем отметку…");
 
     try {
-      const message = await markAttendanceByQr(value);
-
+      const result = await markAttendanceByQr(value);
+      setAttendanceId(result.attendanceId);
       setQrState("pending");
-      setQrMessage(message);
+      setQrMessage(result.message);
+
+      setLocationState("loading");
+      setLocationMessage("Получаем координаты и отправляем их для этой отметки…");
+      try {
+        await verifyAttendanceLocation(result.attendanceId);
+        setLocationState("success");
+        setLocationMessage("Геолокация подтверждена сервером для этой отметки.");
+      } catch (locationError) {
+        setLocationState("error");
+        setLocationMessage(locationError instanceof Error ? locationError.message : "Не удалось проверить геолокацию.");
+      }
     } catch (error: unknown) {
       const message =
         error instanceof Error
@@ -116,51 +141,51 @@ export default function StudentAttendancePage() {
     }
   }, []);
 
-  function requestLocation() {
-    if (!navigator.geolocation) {
+  async function requestLocation() {
+    if (!attendanceId) {
       setLocationState("error");
-      setLocationMessage(
-        "Этот браузер не поддерживает получение геолокации."
-      );
+      setLocationMessage("Сначала отсканируй QR-код, чтобы создать отметку.");
       return;
     }
-
     setLocationState("loading");
-    setLocationMessage("Определяем местоположение…");
-
-    navigator.geolocation.getCurrentPosition(
-      () => {
-        setLocationState("success");
-        setLocationMessage(
-          "Геолокация работает. Передача координат на сервер пока не подключена."
-        );
-      },
-      (error) => {
-        setLocationState("error");
-
-        if (error.code === error.PERMISSION_DENIED) {
-          setLocationMessage(
-            "Доступ к геолокации запрещён. Разреши его в настройках браузера."
-          );
-        } else if (error.code === error.TIMEOUT) {
-          setLocationMessage(
-            "Не удалось определить местоположение вовремя. Попробуй ещё раз."
-          );
-        } else {
-          setLocationMessage(
-            "Местоположение недоступно. Проверь настройки устройства и повтори попытку."
-          );
-        }
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
+    setLocationMessage("Получаем координаты и отправляем их для этой отметки…");
+    try {
+      await verifyAttendanceLocation(attendanceId);
+      setLocationState("success");
+      setLocationMessage("Геолокация подтверждена сервером для этой отметки.");
+    } catch (error) {
+      setLocationState("error");
+      setLocationMessage(error instanceof Error ? error.message : "Не удалось проверить геолокацию.");
+    }
   }
 
-  const locationStatusStyles = {
+  async function confirmDevice() {
+    if (!attendanceId) return;
+    setDeviceState("loading");
+    setDeviceMessage("Подтверди личность в системном окне устройства…");
+    try {
+      await verifyAttendanceDevice(attendanceId);
+      setDeviceState("success");
+      setDeviceMessage("Устройство подтверждено. Отметка остаётся PENDING до решения преподавателя.");
+    } catch (error) {
+      setDeviceState("error");
+      setDeviceMessage(error instanceof Error ? error.message : "Не удалось подтвердить устройство.");
+    }
+  }
+
+  async function registerDevice() {
+    setRegistrationState("loading");
+    try {
+      await registerStudentDevice();
+      setRegistrationState("success");
+      setDeviceMessage("Ключ устройства зарегистрирован. Теперь можно подтверждать отметки.");
+    } catch (error) {
+      setRegistrationState("error");
+      setDeviceMessage(error instanceof Error ? error.message : "Не удалось зарегистрировать устройство.");
+    }
+  }
+
+    const locationStatusStyles = {
     idle: "border-[#D8D2DD] bg-[#F8F6F9] text-[#68636E]",
     loading: "border-[#D8C5E8] bg-[#F3ECF8] text-[#8055A4]",
     success: "border-[#C9DCCF] bg-[#F0F7F1] text-[#39734A]",
@@ -209,8 +234,7 @@ export default function StudentAttendancePage() {
           </h2>
 
           <p className="mt-1.5 max-w-2xl text-[13px] leading-[19px] text-[#68636E] sm:text-[14px]">
-            Выполни два шага, чтобы подготовить отметку о посещении занятия:
-            отсканируй QR-код преподавателя и разреши определение местоположения.
+            Отсканируй QR-код, подтверди геолокацию и подтверди личность на устройстве через WebAuthn.
           </p>
         </section>
 
@@ -288,6 +312,36 @@ export default function StudentAttendancePage() {
                 </p>
               </div>
             )}
+
+            <div className="mt-4 rounded-xl border border-[#E5DFE9] bg-white p-3.5">
+              <p className="text-[13px] font-bold">Подтверждение устройства</p>
+              <p className="mt-1 text-[11px] leading-[17px] text-[#68636E]">
+                Для первой проверки зарегистрируй ключ. Затем для каждой новой отметки потребуется системное подтверждение.
+              </p>
+              <button
+                type="button"
+                onClick={registerDevice}
+                disabled={registrationState === "loading" || registrationState === "success"}
+                className="mt-3 min-h-10 w-full rounded-lg border border-[#D8D2DD] px-3 text-[12px] font-semibold text-[#51465A] disabled:opacity-60"
+              >
+                {registrationState === "loading" ? "Регистрируем устройство…" :
+                 registrationState === "success" ? "Устройство зарегистрировано" : "Зарегистрировать устройство"}
+              </button>
+              {attendanceId !== null && (
+                <button
+                  type="button"
+                  onClick={confirmDevice}
+                  disabled={deviceState === "loading" || deviceState === "success"}
+                  className="mt-2 min-h-11 w-full rounded-lg bg-[#343238] px-3 text-[13px] font-semibold text-white disabled:opacity-60"
+                >
+                  {deviceState === "loading" ? "Ожидаем подтверждение…" :
+                   deviceState === "success" ? "Устройство подтверждено" : "Подтвердить посещение"}
+                </button>
+              )}
+              <p role="status" aria-live="polite" className="mt-2 text-[11px] leading-[17px] text-[#68636E]">
+                {deviceMessage}
+              </p>
+            </div>
           </section>
 
           {/* Геолокация */}
@@ -326,7 +380,7 @@ export default function StudentAttendancePage() {
                 Проверку допустимой зоны выполняет сервер.
               </p>
 
-              {locationState !== "success" && (
+              {attendanceId !== null && locationState !== "success" && (
                 <button
                   type="button"
                   onClick={requestLocation}
@@ -388,11 +442,8 @@ export default function StudentAttendancePage() {
             </p>
 
             <p className="mt-1 text-[11px] leading-[17px] text-[#68636E]">
-              После сканирования QR-код проверяется сервером.
-              При успешной проверке создаётся отметка со статусом PENDING,
-              которую должен подтвердить преподаватель.
-              Получение геолокации работает, но передача координат на сервер
-              и проверка допустимой зоны пока не подключены.
+              После сканирования создаётся отметка PENDING. Геолокация и WebAuthn проверяются Backend для этой же отметки.
+              Даже после успешных проверок статус остаётся PENDING до решения преподавателя.
             </p>
           </div>
         </div>

@@ -1,5 +1,7 @@
 
-export const API_URL = "http://localhost:3000";
+import { API_URL } from "../../_lib/api";
+
+export { API_URL };
 
 const TOKEN_KEY = "smart-attendance.student.token";
 const USER_KEY = "smart-attendance.student.user";

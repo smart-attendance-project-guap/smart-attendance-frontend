@@ -1,7 +1,13 @@
-
 import { API_URL, getStudentToken } from "../_lib/auth";
 
-export async function markAttendanceByQr(qrValue: string) {
+export type AttendanceMarkResult = {
+  message: string;
+  attendanceId: number;
+};
+
+export async function markAttendanceByQr(
+  qrValue: string
+): Promise<AttendanceMarkResult> {
   let payload: unknown;
 
   try {
@@ -26,55 +32,43 @@ export async function markAttendanceByQr(qrValue: string) {
   }
 
   const token = getStudentToken();
-
-  if (!token) {
-    throw new Error("Необходимо войти в аккаунт студента.");
-  }
+  if (!token) throw new Error("Необходимо войти в аккаунт студента.");
 
   let response: Response;
-
   try {
-    response = await fetch(
-      `${API_URL}/api/attendance/${lessonId}/mark`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ qrToken }),
-        signal: AbortSignal.timeout(10000),
-      }
-    );
+    response = await fetch(`${API_URL}/api/attendance/${lessonId}/mark`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ qrToken }),
+      signal: AbortSignal.timeout(10000),
+    });
   } catch {
     throw new Error("Нет связи с сервером. Попробуй ещё раз.");
   }
 
-  if (response.status === 401) {
-    throw new Error("Сеанс истёк. Войди в аккаунт заново.");
-  }
-
-  if (response.status === 403) {
-    throw new Error("Ты не принадлежишь к группе этого занятия.");
-  }
-
-  if (response.status === 409) {
-    throw new Error("Посещение уже было отмечено.");
-  }
-
-  if (response.status === 400) {
-    throw new Error("QR-код недействителен, устарел или уже использован.");
-  }
-
-  if (!response.ok) {
-    throw new Error("Не удалось сохранить посещение.");
-  }
+  if (response.status === 401) throw new Error("Сеанс истёк. Войди в аккаунт заново.");
+  if (response.status === 403) throw new Error("Ты не принадлежишь к группе этого занятия.");
+  if (response.status === 409) throw new Error("Посещение уже было отмечено.");
+  if (response.status === 400) throw new Error("QR-код недействителен, устарел или уже использован.");
+  if (!response.ok) throw new Error("Не удалось сохранить посещение.");
 
   const result = await response.json();
+  const attendanceId = result?.attendance?.id;
 
-  if (response.status !== 201 || result.attendance?.status !== "PENDING") {
-    throw new Error("Не удалось подтвердить результат отметки.");
+  if (
+    response.status !== 201 ||
+    result?.attendance?.status !== "PENDING" ||
+    !Number.isSafeInteger(attendanceId) ||
+    attendanceId <= 0
+  ) {
+    throw new Error("Сервер не вернул корректный идентификатор созданной отметки.");
   }
 
-  return "Отметка отправлена на проверку преподавателю.";
+  return {
+    message: "Отметка создана и ожидает проверки преподавателя.",
+    attendanceId,
+  };
 }

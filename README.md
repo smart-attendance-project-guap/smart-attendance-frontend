@@ -12,7 +12,7 @@ Frontend приложения Smart Attendance — системы автомат
 - TypeScript
 - Tailwind CSS
 - ESLint
-- html5-qrcode
+- html5-qrcode\n- @simplewebauthn/browser
 
 ## Структура приложения
 
