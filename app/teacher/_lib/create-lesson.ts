@@ -1,6 +1,7 @@
 import { API_URL, clearTeacherToken, getTeacherToken } from "./auth";
 
 export type Reference = { id: number; name: string };
+export type ClassroomReference = Reference & { building?: Reference | null };
 export type LessonInput = { discipline: string; groupId: number; classroomId: number; startsAt: string; endsAt: string };
 
 async function request(path: string, signal: AbortSignal, body?: LessonInput) {
@@ -22,13 +23,20 @@ async function request(path: string, signal: AbortSignal, body?: LessonInput) {
   return response.json();
 }
 
-export async function getLessonReferences(signal: AbortSignal): Promise<{ disciplines: Reference[]; groups: Reference[]; classrooms: Reference[] }> {
+export async function getLessonReferences(signal: AbortSignal): Promise<{ disciplines: Reference[]; groups: Reference[]; classrooms: ClassroomReference[] }> {
   const [disciplinesData, groupsData, classroomsData] = await Promise.all([
     request("disciplines", signal), request("groups", signal), request("classrooms", signal),
   ]);
   const valid = (value: unknown): value is Reference[] => Array.isArray(value) && value.every(item => item && Number.isInteger(item.id) && item.id > 0 && typeof item.name === "string");
   if (!valid(disciplinesData.disciplines) || !valid(groupsData.groups) || !valid(classroomsData.classrooms)) throw new Error("Сервер вернул неверный формат справочников.");
-  return { disciplines: disciplinesData.disciplines, groups: groupsData.groups, classrooms: classroomsData.classrooms };
+  const classrooms: ClassroomReference[] = classroomsData.classrooms.map((item: ClassroomReference) => ({
+    id: item.id,
+    name: item.name,
+    building: item.building && Number.isInteger(item.building.id) && typeof item.building.name === "string"
+      ? { id: item.building.id, name: item.building.name }
+      : null,
+  }));
+  return { disciplines: disciplinesData.disciplines, groups: groupsData.groups, classrooms };
 }
 
 export async function createLesson(input: LessonInput, signal: AbortSignal): Promise<number> {

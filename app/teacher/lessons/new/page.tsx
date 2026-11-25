@@ -8,6 +8,7 @@ import {
   createLesson,
   getLessonReferences,
   type Reference,
+  type ClassroomReference,
 } from "../../_lib/create-lesson";
 
 function Icon({
@@ -121,7 +122,7 @@ export default function NewTeacherLessonPage() {
   const [references, setReferences] = useState<{
     disciplines: Reference[];
     groups: Reference[];
-    classrooms: Reference[];
+    classrooms: ClassroomReference[];
   } | null>(null);
 
   const [loadError, setLoadError] = useState("");
@@ -364,7 +365,7 @@ export default function NewTeacherLessonPage() {
                   </option>
                   {references?.classrooms.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name}
+                      {item.name}{item.building ? ` · ${item.building.name}` : " · Корпус не указан"}
                     </option>
                   ))}
                 </select>
