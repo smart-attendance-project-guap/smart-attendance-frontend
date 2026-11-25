@@ -7,6 +7,26 @@ const buttonStyle = "min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-
 const labels = { PENDING: "Ожидает проверки", PRESENT: "Присутствует", LATE: "Опоздал(а)", REJECTED: "Отметка отклонена" };
 const badgeStyles = { PENDING: "bg-amber-50 text-amber-900", PRESENT: "bg-green-50 text-green-800", LATE: "bg-blue-50 text-blue-800", REJECTED: "bg-red-50 text-red-800" };
 
+const locationReasons: Record<string, string> = {
+  LOCATION_OUTSIDE_RADIUS: "За пределами зоны",
+  LOCATION_ACCURACY_TOO_LOW: "Недостаточная точность",
+  LOCATION_CAPTURE_TIME_OUTSIDE_WINDOW: "Координаты получены вне допустимого времени",
+};
+
+function formatReason(reason: string) {
+  return locationReasons[reason] ?? reason;
+}
+
+function AttendanceChecks({ attendance }: { attendance: NonNullable<AttendanceRow["attendance"]> }) {
+  const location = attendance.locationChecked
+    ? "Геолокация проверена"
+    : (attendance.rejectionReason && locationReasons[attendance.rejectionReason]) || "Геолокация не подтверждена";
+  return <ul className="space-y-1">
+    <li>Подтверждение на устройстве: {attendance.deviceChecked ? "Пройдено" : "Не пройдено"}</li>
+    <li>{location}</li>
+  </ul>;
+}
+
 export default function LessonAttendance({ lessonId, finished }: { lessonId: number; finished: boolean }) {
   const [rows, setRows] = useState<AttendanceRow[] | null>(null);
   const [error, setError] = useState("");
@@ -97,9 +117,9 @@ export default function LessonAttendance({ lessonId, finished }: { lessonId: num
         <h3 className="break-words font-semibold">{student.lastName} {student.firstName}</h3>
         <p className="mt-1 break-all text-slate-500">{student.email}</p>
         <dl className="mt-4 space-y-4">
-          <div><dt className="font-semibold">Статус</dt><dd className="mt-1"><span className={`inline-block rounded-lg px-2 py-1 ${a ? badgeStyles[a.status] : "bg-slate-100 text-slate-700"}`}>{a ? labels[a.status] : finished ? "Не отметился(ась)" : "Пока не отметился(ась)"}</span>{a?.rejectionReason && <p className="mt-2 whitespace-pre-wrap break-words">Причина: {a.rejectionReason}</p>}</dd></div>
+          <div><dt className="font-semibold">Статус</dt><dd className="mt-1"><span className={`inline-block rounded-lg px-2 py-1 ${a ? badgeStyles[a.status] : "bg-slate-100 text-slate-700"}`}>{a ? labels[a.status] : finished ? "Не отметился(ась)" : "Пока не отметился(ась)"}</span>{a?.rejectionReason && <p className="mt-2 whitespace-pre-wrap break-words">Причина: {formatReason(a.rejectionReason)}</p>}</dd></div>
           <div><dt className="font-semibold">Время отметки</dt><dd className="mt-1 break-words">{a ? new Date(a.markedAt).toLocaleString("ru-RU") : "—"}</dd></div>
-          <div><dt className="font-semibold">Проверки</dt><dd className="mt-1 break-words">{a ? <ul className="space-y-1"><li>Лицо: {a.faceChecked ? "пройдена" : "не подтверждена"}</li><li>Устройство: {a.deviceChecked ? "пройдена" : "не подтверждена"}</li><li>Местоположение: {a.locationChecked ? "пройдена" : "не подтверждена"}</li></ul> : "Нет отметки"}</dd></div>
+          <div><dt className="font-semibold">Проверки</dt><dd className="mt-1 break-words">{a ? <AttendanceChecks attendance={a} /> : "Нет отметки"}</dd></div>
           <div><dt className="font-semibold">Решение</dt><dd className="mt-2">{a ? a.reviewed ? "Рассмотрено" : <div className="flex flex-col gap-2"><button disabled={busy || loading || Boolean(error)} className={buttonStyle} onClick={() => { setSelected({ ids: [a.id], action: "approve", name: `${student.lastName} ${student.firstName}` }); setReason(""); setNotice(""); }}>Подтвердить</button><button disabled={busy || loading || Boolean(error)} className={buttonStyle} onClick={() => { setSelected({ ids: [a.id], action: "reject", name: `${student.lastName} ${student.firstName}` }); setReason(""); setNotice(""); }}>Отклонить</button></div> : "—"}</dd></div>
         </dl>
       </li>)}</ul>
@@ -108,9 +128,9 @@ export default function LessonAttendance({ lessonId, finished }: { lessonId: num
       <thead><tr className="border-b border-slate-200"><th scope="col" className="p-3">Студент</th><th scope="col" className="p-3">Статус</th><th scope="col" className="p-3">Время отметки</th><th scope="col" className="p-3">Проверки</th><th scope="col" className="p-3">Решение</th></tr></thead>
       <tbody>{rows.map(({ student, attendance: a }) => <tr key={student.id} className="border-b border-slate-100 align-top">
         <th scope="row" className="p-3 font-normal"><span className="font-semibold">{student.lastName} {student.firstName}</span><span className="mt-1 block break-all text-slate-500">{student.email}</span></th>
-        <td className="p-3"><span className={`inline-block rounded-lg px-2 py-1 ${a ? badgeStyles[a.status] : "bg-slate-100 text-slate-700"}`}>{a ? labels[a.status] : finished ? "Не отметился(ась)" : "Пока не отметился(ась)"}</span>{a?.rejectionReason && <p className="mt-2 whitespace-pre-wrap break-words">Причина: {a.rejectionReason}</p>}</td>
+        <td className="p-3"><span className={`inline-block rounded-lg px-2 py-1 ${a ? badgeStyles[a.status] : "bg-slate-100 text-slate-700"}`}>{a ? labels[a.status] : finished ? "Не отметился(ась)" : "Пока не отметился(ась)"}</span>{a?.rejectionReason && <p className="mt-2 whitespace-pre-wrap break-words">Причина: {formatReason(a.rejectionReason)}</p>}</td>
         <td className="whitespace-nowrap p-3">{a ? new Date(a.markedAt).toLocaleString("ru-RU") : "—"}</td>
-        <td className="p-3">{a ? <ul className="space-y-1"><li>Лицо: {a.faceChecked ? "пройдена" : "не подтверждена"}</li><li>Устройство: {a.deviceChecked ? "пройдена" : "не подтверждена"}</li><li>Местоположение: {a.locationChecked ? "пройдена" : "не подтверждена"}</li></ul> : "Нет отметки"}</td>
+        <td className="p-3">{a ? <AttendanceChecks attendance={a} /> : "Нет отметки"}</td>
         <td className="p-3">{a ? a.reviewed ? "Рассмотрено" : <div className="flex flex-col gap-2"><button disabled={busy || loading || Boolean(error)} className={buttonStyle} onClick={() => { setSelected({ ids: [a.id], action: "approve", name: `${student.lastName} ${student.firstName}` }); setReason(""); setNotice(""); }}>Подтвердить</button><button disabled={busy || loading || Boolean(error)} className={buttonStyle} onClick={() => { setSelected({ ids: [a.id], action: "reject", name: `${student.lastName} ${student.firstName}` }); setReason(""); setNotice(""); }}>Отклонить</button></div> : "—"}</td>
       </tr>)}</tbody>
     </table></div></>}
