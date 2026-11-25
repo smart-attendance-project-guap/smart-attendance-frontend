@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   createLesson,
-  DISCIPLINES,
   getLessonReferences,
   type Reference,
 } from "../../_lib/create-lesson";
@@ -120,6 +119,7 @@ export default function NewTeacherLessonPage() {
   const router = useRouter();
 
   const [references, setReferences] = useState<{
+    disciplines: Reference[];
     groups: Reference[];
     classrooms: Reference[];
   } | null>(null);
@@ -165,7 +165,8 @@ export default function NewTeacherLessonPage() {
     if (
       submitting.current ||
       !references?.groups.length ||
-      !references.classrooms.length
+      !references.classrooms.length ||
+      !references.disciplines.length
     ) {
       return;
     }
@@ -209,7 +210,7 @@ export default function NewTeacherLessonPage() {
 
   const empty =
     references &&
-    (!references.groups.length || !references.classrooms.length);
+    (!references.disciplines.length || !references.groups.length || !references.classrooms.length);
 
   return (
     <main
@@ -258,7 +259,7 @@ export default function NewTeacherLessonPage() {
               role="status"
               className="rounded-xl border border-[#D8D2DD] bg-[#FCFBFD] p-6 text-center text-[14px] text-[#68636E]"
             >
-              Загружаем группы и аудитории…
+              Загружаем дисциплины, группы и аудитории…
             </div>
           ) : null}
 
@@ -267,6 +268,7 @@ export default function NewTeacherLessonPage() {
               role="status"
               className="mt-5 rounded-xl border border-[#EAD9B9] bg-[#FBF5E9] p-5 text-[14px] leading-6 text-[#795D2E]"
             >
+              {!references.disciplines.length && "В базе пока нет дисциплин. "}
               {!references.groups.length && "В базе пока нет групп. "}
               {!references.classrooms.length && "В базе пока нет аудиторий. "}
               Для создания занятия сначала нужно добавить эти данные в базу
@@ -303,6 +305,7 @@ export default function NewTeacherLessonPage() {
                   <select
                     id="discipline"
                     name="discipline"
+                    disabled={!references?.disciplines.length}
                     required
                     defaultValue=""
                     className={fieldStyle}
@@ -310,8 +313,8 @@ export default function NewTeacherLessonPage() {
                     <option value="" disabled>
                       Выберите дисциплину
                     </option>
-                    {DISCIPLINES.map((name) => (
-                      <option key={name} value={name}>
+                    {references?.disciplines.map(({ id, name }) => (
+                      <option key={id} value={name}>
                         {name}
                       </option>
                     ))}
