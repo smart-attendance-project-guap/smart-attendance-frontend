@@ -95,9 +95,11 @@ export default function LessonAttendance({ lessonId, finished }: { lessonId: num
   const pendingIds = rows?.flatMap(row => row.attendance?.status === "PENDING" && !row.attendance.reviewed ? [row.attendance.id] : []) ?? [];
   const confirmed = rows?.filter(row => row.attendance && ["PRESENT", "LATE"].includes(row.attendance.status)).length ?? 0;
   const pending = rows?.filter(row => row.attendance?.status === "PENDING").length ?? 0;
+  const confirmedGuests = rows?.filter(row => row.attendance?.isGuest && ["PRESENT", "LATE"].includes(row.attendance.status)).length ?? 0;
+  const groupStudents = rows?.filter(row => !row.attendance?.isGuest).length ?? 0;
   return <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-semibold">Посещаемость</h2><button disabled={busy || loading} onClick={() => void refresh()} className={buttonStyle}>{loading ? "Обновляем…" : "Обновить"}</button></div>
-    {rows && <p className="mt-3 text-sm text-slate-600">Студентов: {rows.length}. Присутствуют с учётом опоздавших: {confirmed}. Ожидают проверки: {pending}.</p>}
+    {rows && <p className="mt-3 text-sm text-slate-600">Студентов групп: {groupStudents}. Присутствуют из групп: {confirmed - confirmedGuests}. Подтверждённые гости: {confirmedGuests}. Всего присутствуют с учётом опоздавших: {confirmed}. Ожидают проверки: {pending}.</p>}
     <p className="mt-2 text-sm text-slate-600">Данные обновляются каждые 10 секунд, пока страница открыта.</p>
     {pendingIds.length > 0 && <div className="mt-4 flex flex-wrap gap-3">
       <button className={buttonStyle} disabled={busy || loading || Boolean(error)} onClick={() => { setSelected({ ids: pendingIds, action: "approve", name: "" }); setReason(""); setNotice(""); }}>Подтвердить все ({pendingIds.length})</button>
@@ -115,6 +117,7 @@ export default function LessonAttendance({ lessonId, finished }: { lessonId: num
     {!rows ? <p role="status" className="mt-5">{error ? "Посещаемость не загружена." : "Загружаем посещаемость…"}</p> : !rows.length ? <p className="mt-5">В группе пока нет студентов и отметок.</p> : <>
       <ul className="mt-5 space-y-4 xl:hidden" aria-label="Посещаемость студентов">{rows.map(({ student, attendance: a }) => <li key={student.id} className="min-w-0 rounded-xl border border-slate-200 p-4 text-sm">
         <h3 className="break-words font-semibold">{student.lastName} {student.firstName}</h3>
+        {a?.isGuest && <span className="mt-2 inline-block rounded-full bg-[#F0E7F6] px-2 py-1 text-xs font-semibold text-[#8958AC]">Гость</span>}
         <p className="mt-1 break-all text-slate-500">{student.email}</p>
         <dl className="mt-4 space-y-4">
           <div><dt className="font-semibold">Статус</dt><dd className="mt-1"><span className={`inline-block rounded-lg px-2 py-1 ${a ? badgeStyles[a.status] : "bg-slate-100 text-slate-700"}`}>{a ? labels[a.status] : finished ? "Не отметился(ась)" : "Пока не отметился(ась)"}</span>{a?.rejectionReason && <p className="mt-2 whitespace-pre-wrap break-words">Причина: {formatReason(a.rejectionReason)}</p>}</dd></div>
@@ -127,7 +130,7 @@ export default function LessonAttendance({ lessonId, finished }: { lessonId: num
       <caption className="sr-only">Студенты и отметки посещаемости занятия</caption>
       <thead><tr className="border-b border-slate-200"><th scope="col" className="p-3">Студент</th><th scope="col" className="p-3">Статус</th><th scope="col" className="p-3">Время отметки</th><th scope="col" className="p-3">Проверки</th><th scope="col" className="p-3">Решение</th></tr></thead>
       <tbody>{rows.map(({ student, attendance: a }) => <tr key={student.id} className="border-b border-slate-100 align-top">
-        <th scope="row" className="p-3 font-normal"><span className="font-semibold">{student.lastName} {student.firstName}</span><span className="mt-1 block break-all text-slate-500">{student.email}</span></th>
+        <th scope="row" className="p-3 font-normal"><span className="font-semibold">{student.lastName} {student.firstName}</span>{a?.isGuest && <span className="ml-2 inline-block rounded-full bg-[#F0E7F6] px-2 py-1 text-xs font-semibold text-[#8958AC]">Гость</span>}<span className="mt-1 block break-all text-slate-500">{student.email}</span></th>
         <td className="p-3"><span className={`inline-block rounded-lg px-2 py-1 ${a ? badgeStyles[a.status] : "bg-slate-100 text-slate-700"}`}>{a ? labels[a.status] : finished ? "Не отметился(ась)" : "Пока не отметился(ась)"}</span>{a?.rejectionReason && <p className="mt-2 whitespace-pre-wrap break-words">Причина: {formatReason(a.rejectionReason)}</p>}</td>
         <td className="whitespace-nowrap p-3">{a ? new Date(a.markedAt).toLocaleString("ru-RU") : "—"}</td>
         <td className="p-3">{a ? <AttendanceChecks attendance={a} /> : "Нет отметки"}</td>

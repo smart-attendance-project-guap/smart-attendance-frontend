@@ -3,7 +3,7 @@ import { API_URL, clearTeacherToken, getTeacherToken } from "./auth";
 export type Student = { id: number; firstName: string; lastName: string; email: string };
 export type Attendance = {
   id: number; studentId: number; status: "PENDING" | "PRESENT" | "LATE" | "REJECTED";
-  markedAt: string; reviewed: boolean; faceChecked: boolean; deviceChecked: boolean;
+  isGuest: boolean; markedAt: string; reviewed: boolean; faceChecked: boolean; deviceChecked: boolean;
   locationChecked: boolean; rejectionReason: string | null; student: Student;
 };
 export type AttendanceRow = { student: Student; attendance: Attendance | null };
@@ -36,7 +36,7 @@ export async function getAttendance(lessonId: number, signal: AbortSignal): Prom
   const data = await request(`lesson/${lessonId}`, signal);
   const studentValid = (s: Student) => s && Number.isInteger(s.id) && typeof s.firstName === "string" && typeof s.lastName === "string" && typeof s.email === "string";
   if (data.lessonId !== lessonId || !Array.isArray(data.attendances) || !Array.isArray(data.absentStudents)
-    || !data.absentStudents.every(studentValid) || !data.attendances.every((a: Attendance) => a && Number.isInteger(a.id) && a.studentId === a.student?.id && studentValid(a.student) && ["PENDING", "PRESENT", "LATE", "REJECTED"].includes(a.status) && typeof a.reviewed === "boolean" && [a.faceChecked, a.deviceChecked, a.locationChecked].every(v => typeof v === "boolean") && Number.isFinite(Date.parse(a.markedAt)))) {
+    || !data.absentStudents.every(studentValid) || !data.attendances.every((a: Attendance) => a && Number.isInteger(a.id) && a.studentId === a.student?.id && studentValid(a.student) && ["PENDING", "PRESENT", "LATE", "REJECTED"].includes(a.status) && typeof a.reviewed === "boolean" && typeof a.isGuest === "boolean" && [a.faceChecked, a.deviceChecked, a.locationChecked].every(v => typeof v === "boolean") && Number.isFinite(Date.parse(a.markedAt)))) {
     throw new Error("Не удалось прочитать данные посещаемости сервера.");
   }
   return mergeAttendance(data.attendances, data.absentStudents);

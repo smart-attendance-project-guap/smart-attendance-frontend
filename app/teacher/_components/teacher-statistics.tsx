@@ -455,29 +455,24 @@ export default function TeacherStatisticsPanel() {
           </section>
 
           <section aria-label="Сводные показатели">
-            <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {[
                 {
                   label: "Завершено занятий",
                   value: number(filtered.summary.totalLessons),
-                  description: "Всего занятий",
+                  description: "За выбранный период",
                 },
                 {
-                  label: "Ожидалось посещений",
-                  value: number(filtered.summary.totalStudents),
-                  description: "По текущему составу групп",
-                },
-                {
-                  label: "Подтверждено посещений",
+                  label: "Посещений студентов групп",
                   value: number(filtered.summary.attendedStudents),
-                  description: "Включая опоздания",
+                  description: "Включая опоздания, без гостей",
                 },
                 {
-                  label: "Посещаемость",
+                  label: "Посещаемость групп",
                   value: percentage(filtered.summary),
-                  description: "Общий показатель",
+                  description: `${number(filtered.summary.attendedStudents)} из ${number(filtered.summary.totalStudents)} ожидаемых посещений`,
                 },
-              ].map((item, index) => (
+              ].map((item) => (
                 <div
                   key={item.label}
                   className="rounded-2xl border border-[#E3DCE8] bg-white p-4 sm:p-5"
@@ -506,7 +501,7 @@ export default function TeacherStatisticsPanel() {
             <p className="mt-4 rounded-xl bg-[#F7F5F8] px-4 py-3 text-xs leading-5 text-[#77717C]">
               Один студент на двух занятиях — два ожидаемых посещения.
               Подтверждённые посещения включают опоздания. Численность берётся
-              из текущего состава групп.
+              из текущего состава групп. Гости учитываются отдельно и не меняют процент посещаемости групп.
             </p>
           </section>
 
@@ -714,10 +709,10 @@ export default function TeacherStatisticsPanel() {
                             number(lesson.totalStudents),
                           ],
                           [
-                            "Присутствовали",
+                            "Присутствовали из групп",
                             number(lesson.attendedStudents),
                           ],
-                          ["Посещаемость", percentage(lesson)],
+                          ["Посещаемость групп", percentage(lesson)],
                         ].map(([label, value]) => (
                           <div key={label} className="min-w-0">
                             <dt className="text-xs leading-5 text-[#8A8490]">
@@ -746,7 +741,7 @@ export default function TeacherStatisticsPanel() {
                           "Группа",
                           "Аудитория",
                           "Студентов в группе",
-                          "Присутствовали",
+                          "Присутствовали из групп",
                           "Посещаемость",
                         ].map((label) => (
                           <th
@@ -798,7 +793,7 @@ export default function TeacherStatisticsPanel() {
                             {number(lesson.totalStudents)}
                           </td>
                           <td className={cell}>
-                            {number(lesson.attendedStudents)}
+                            {number(lesson.attendedStudents)} из {number(lesson.totalStudents)}
                           </td>
                           <td
                             className={`${cell} font-semibold text-[#8958AC]`}

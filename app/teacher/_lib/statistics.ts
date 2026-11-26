@@ -6,9 +6,10 @@ export type AttendanceTotals = {
   attendedStudents: number;
   attendancePercentage: number;
 };
-export type TeacherSummary = AttendanceTotals & { totalLessons: number };
-export type GroupStatistics = TeacherSummary & { groupId: number; groupName: string };
+export type TeacherSummary = AttendanceTotals & { totalLessons: number; guestAttendedStudents: number };
+export type GroupStatistics = Omit<TeacherSummary, "guestAttendedStudents"> & { groupId: number; groupName: string };
 export type LessonStatistics = AttendanceTotals & {
+  guestAttendedStudents: number;
   discipline?: string; lessonId: number; startsAt: string; endsAt: string;
   group: { id: number; name: string };
   classroom: { id: number; name: string };
@@ -30,7 +31,7 @@ function totals(value: unknown): value is AttendanceTotals {
     && value.attendancePercentage >= 0;
 }
 function summary(value: unknown): value is TeacherSummary {
-  return record(value) && count(value.totalLessons) && totals(value);
+  return record(value) && count(value.totalLessons) && count(value.guestAttendedStudents) && totals(value);
 }
 function reference(value: unknown): value is { id: number; name: string } {
   return record(value) && count(value.id) && value.id > 0 && typeof value.name === "string";
@@ -39,11 +40,11 @@ function date(value: unknown): value is string {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
 function group(value: unknown): value is GroupStatistics {
-  return record(value) && count(value.groupId) && value.groupId > 0 && typeof value.groupName === "string" && summary(value);
+  return record(value) && count(value.groupId) && value.groupId > 0 && typeof value.groupName === "string" && count(value.totalLessons) && totals(value);
 }
 function lesson(value: unknown): value is LessonStatistics {
   return record(value) && count(value.lessonId) && value.lessonId > 0
-    && date(value.startsAt) && date(value.endsAt) && reference(value.group) && reference(value.classroom) && totals(value);
+    && count(value.guestAttendedStudents) && date(value.startsAt) && date(value.endsAt) && reference(value.group) && reference(value.classroom) && totals(value);
 }
 
 async function request(path: string, token: string, signal: AbortSignal): Promise<unknown> {
@@ -66,7 +67,7 @@ export async function getTeacherStatistics(signal: AbortSignal): Promise<Teacher
   ]);
   if (!summary(overall) || !record(byGroup) || !Array.isArray(byGroup.stats) || !byGroup.stats.every(group)
     || !record(byLesson) || !Array.isArray(byLesson.stats) || !byLesson.stats.every(lesson)) {
-    throw new Error("Сервер вернул неверный формат статистики.");
+    throw new Error("Сервер вернул неверный формат статистики. Проверьте, что Backend обновлён и поддерживает отдельный учёт гостей.");
   }
   return {
     summary: overall,
@@ -96,11 +97,12 @@ export function filterTeacherStatistics(data: TeacherStatistics, filters: Statis
       && (!filters.discipline || lesson.discipline === filters.discipline)
       && (!filters.from || day >= filters.from) && (!filters.to || day <= filters.to);
   });
-  const summary: TeacherSummary = { totalLessons: lessons.length, totalStudents: 0, attendedStudents: 0, attendancePercentage: 0 };
+  const summary: TeacherSummary = { totalLessons: lessons.length, totalStudents: 0, attendedStudents: 0, guestAttendedStudents: 0, attendancePercentage: 0 };
   const groups = new Map<number, GroupStatistics>();
   for (const lesson of lessons) {
     summary.totalStudents += lesson.totalStudents;
     summary.attendedStudents += lesson.attendedStudents;
+    summary.guestAttendedStudents += lesson.guestAttendedStudents;
     const group = groups.get(lesson.group.id) ?? { groupId: lesson.group.id, groupName: lesson.group.name, totalLessons: 0, totalStudents: 0, attendedStudents: 0, attendancePercentage: 0 };
     group.totalLessons++;
     group.totalStudents += lesson.totalStudents;
