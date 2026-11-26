@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import AttendanceExport from "./attendance-export";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getTeacherStatistics,
@@ -432,6 +433,8 @@ export default function TeacherStatisticsPanel() {
                 31 августа. Выберите учебный год и нажмите нужный семестр.
               </p>
             </div>
+
+            <AttendanceExport filters={filters} disabled={loading || Boolean(error)} />
 
             <div className="mt-4 border-t border-[#E9E3ED] pt-4">
               <p className={mutedText}>
