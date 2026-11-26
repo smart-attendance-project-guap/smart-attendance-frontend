@@ -45,6 +45,16 @@ function checkAuth(status: number) {
   }
   if (status === 403) throw new Error("Нет доступа к этому расписанию.");
 }
+export async function fetchScheduleClassrooms(signal: AbortSignal): Promise<ScheduleClassroom[]> {
+  const response = await fetch(`${API_URL}/api/classrooms`, { headers: authHeaders(), cache: "no-store", signal });
+  checkAuth(response.status);
+  if (!response.ok) throw new Error("Не удалось загрузить аудитории. Повторите выбор.");
+  const data = await response.json();
+  if (!Array.isArray(data?.classrooms) || !data.classrooms.every(isClassroom)) throw new Error("Сервер вернул непонятный список аудиторий.");
+  if (!data.classrooms.length) throw new Error("В справочнике пока нет аудиторий.");
+  return data.classrooms;
+}
+
 export async function fetchScheduleSuggestions(signal: AbortSignal): Promise<ScheduleSuggestion[]> {
   const response = await fetch(`${API_URL}/api/schedule/suggestions`, {
     headers: authHeaders(), cache: "no-store", signal,
