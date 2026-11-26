@@ -213,6 +213,9 @@ export default function TeacherPage() {
               icon={<Icon type="statistics" size={44} />}
             />
           </div>
+          <Link href="/teacher/schedule/import" className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-[#895BB2] hover:underline">
+            Загрузить расписание
+          </Link>
         </section>
       </div>
     </main>
