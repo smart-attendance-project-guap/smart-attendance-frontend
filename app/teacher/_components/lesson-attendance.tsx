@@ -113,7 +113,7 @@ export default function LessonAttendance({ lessonId, finished }: { lessonId: num
     {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
     {notice && <p role="status" className="mt-4 rounded-lg bg-slate-50 p-3">{notice}</p>}
     {!rows ? <p role="status" className="mt-5">{error ? "Посещаемость не загружена." : "Загружаем посещаемость…"}</p> : !rows.length ? <p className="mt-5">В группе пока нет студентов и отметок.</p> : <>
-      <ul className="mt-5 space-y-4 sm:hidden" aria-label="Посещаемость студентов">{rows.map(({ student, attendance: a }) => <li key={student.id} className="min-w-0 rounded-xl border border-slate-200 p-4 text-sm">
+      <ul className="mt-5 space-y-4 xl:hidden" aria-label="Посещаемость студентов">{rows.map(({ student, attendance: a }) => <li key={student.id} className="min-w-0 rounded-xl border border-slate-200 p-4 text-sm">
         <h3 className="break-words font-semibold">{student.lastName} {student.firstName}</h3>
         <p className="mt-1 break-all text-slate-500">{student.email}</p>
         <dl className="mt-4 space-y-4">
@@ -123,7 +123,7 @@ export default function LessonAttendance({ lessonId, finished }: { lessonId: num
           <div><dt className="font-semibold">Решение</dt><dd className="mt-2">{a ? a.reviewed ? "Рассмотрено" : <div className="flex flex-col gap-2"><button disabled={busy || loading || Boolean(error)} className={buttonStyle} onClick={() => { setSelected({ ids: [a.id], action: "approve", name: `${student.lastName} ${student.firstName}` }); setReason(""); setNotice(""); }}>Подтвердить</button><button disabled={busy || loading || Boolean(error)} className={buttonStyle} onClick={() => { setSelected({ ids: [a.id], action: "reject", name: `${student.lastName} ${student.firstName}` }); setReason(""); setNotice(""); }}>Отклонить</button></div> : "—"}</dd></div>
         </dl>
       </li>)}</ul>
-      <div className="mt-5 hidden overflow-x-auto sm:block"><table className="w-full text-left text-sm">
+      <div className="mt-5 hidden overflow-x-auto xl:block"><table className="w-full text-left text-sm">
       <caption className="sr-only">Студенты и отметки посещаемости занятия</caption>
       <thead><tr className="border-b border-slate-200"><th scope="col" className="p-3">Студент</th><th scope="col" className="p-3">Статус</th><th scope="col" className="p-3">Время отметки</th><th scope="col" className="p-3">Проверки</th><th scope="col" className="p-3">Решение</th></tr></thead>
       <tbody>{rows.map(({ student, attendance: a }) => <tr key={student.id} className="border-b border-slate-100 align-top">
