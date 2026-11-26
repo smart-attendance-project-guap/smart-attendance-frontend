@@ -89,11 +89,19 @@ export default function StudentAttendancePage() {
 
   const [qrState, setQrState] = useState<QrState>("idle");
   const [qrMessage, setQrMessage] = useState("");
+  const [qrScannerKey, setQrScannerKey] = useState(0);
   const [attendanceId, setAttendanceId] = useState<number | null>(null);
   const [deviceState, setDeviceState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [deviceMessage, setDeviceMessage] = useState("Устройство ещё не подтверждено.");
   const [registrationState, setRegistrationState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const scanRequestInProgress = useRef(false);
+  const [expectedLessonId] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const raw = new URLSearchParams(window.location.search).get("lessonId");
+    if (raw === null) return null;
+    const parsed = Number(raw);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+  });
 
   const handleQrScan = useCallback(async (value: string) => {
     if (scanRequestInProgress.current) return;
@@ -108,7 +116,7 @@ export default function StudentAttendancePage() {
     setQrMessage("Проверяем QR-код и отправляем отметку…");
 
     try {
-      const result = await markAttendanceByQr(value);
+      const result = await markAttendanceByQr(value, expectedLessonId ?? undefined);
       setAttendanceId(result.attendanceId);
       setQrState("pending");
       setQrMessage(result.message);
@@ -133,13 +141,14 @@ export default function StudentAttendancePage() {
         setQrState("duplicate");
       } else {
         setQrState("error");
+        setQrScannerKey((current) => current + 1);
       }
 
       setQrMessage(message);
     } finally {
       scanRequestInProgress.current = false;
     }
-  }, []);
+  }, [expectedLessonId]);
 
   async function requestLocation() {
     if (!attendanceId) {
@@ -236,6 +245,11 @@ export default function StudentAttendancePage() {
           <p className="mt-1.5 max-w-2xl text-[13px] leading-[19px] text-[#68636E] sm:text-[14px]">
             Отсканируй QR-код, подтверди геолокацию и подтверди личность на устройстве через WebAuthn.
           </p>
+          {expectedLessonId !== null && (
+            <p className="mt-2 inline-flex rounded-lg border border-[#D8C5E8] bg-[#F3ECF8] px-3 py-2 text-[12px] font-semibold text-[#8055A4]">
+              Выбрана пара для проверки QR · ID {expectedLessonId}
+            </p>
+          )}
         </section>
 
         {/* Основные шаги */}
@@ -264,7 +278,7 @@ export default function StudentAttendancePage() {
             </div>
 
             <div className="min-w-0 overflow-hidden rounded-xl border border-[#D8D2DD] bg-[#F3F0F4] p-3">
-              <QrScanner onScan={handleQrScan} />
+              <QrScanner key={qrScannerKey} onScan={handleQrScan} />
             </div>
 
             <p className="mt-3 text-[11px] leading-[17px] text-[#68636E]">

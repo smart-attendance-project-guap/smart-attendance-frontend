@@ -190,9 +190,14 @@ export default function StudentHistoryPage() {
   };
 
   useEffect(() => {
-    const controller = new AbortController();
+    let active = true;
+    let current: AbortController | null = null;
 
     async function loadHistory() {
+      if (!active || current) return;
+      const controller = new AbortController();
+      current = controller;
+      const timeout = setTimeout(() => controller.abort(), 15000);
       try {
         const authorized = await verifyStudent(controller.signal);
 
@@ -329,30 +334,39 @@ export default function StudentHistoryPage() {
             new Date(a.sortDate).getTime()
         );
 
+        if (!active || controller.signal.aborted) return;
         setEntries(combinedEntries);
+        setError("");
       } catch (cause) {
-        if (
-          cause instanceof DOMException &&
-          cause.name === "AbortError"
-        ) {
-          return;
-        }
-
+        if (!active) return;
         setError(
-          cause instanceof Error
-            ? cause.message
-            : "Не удалось загрузить историю посещаемости."
+          controller.signal.aborted
+            ? "Не удалось загрузить историю вовремя. Повторим обновление автоматически."
+            : cause instanceof Error
+              ? cause.message
+              : "Не удалось загрузить историю посещаемости."
         );
       } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
+        clearTimeout(timeout);
+        current = null;
+        if (active) setLoading(false);
       }
     }
 
-    loadHistory();
-
-    return () => controller.abort();
+    void loadHistory();
+    const refresh = () => {
+      if (document.visibilityState === "visible") void loadHistory();
+    };
+    const interval = setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      active = false;
+      current?.abort();
+      clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, []);
 
   return (

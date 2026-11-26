@@ -26,6 +26,64 @@ type Group = {
   name: string;
 };
 
+type LessonSuggestion = {
+  id: number;
+  scheduleEntryId: number;
+  canonicalScheduleId: number;
+  discipline: string;
+  teacherId: number;
+  teacherName: string;
+  classroom: string;
+  startsAt: string;
+  endsAt: string;
+  groups: Group[];
+};
+
+type AvailableLesson = {
+  id: number;
+  discipline: string;
+  startsAt: string;
+  endsAt: string;
+  classroom: {
+    id: number;
+    name: string;
+    building?: { name: string } | null;
+  } | null;
+  groups: Group[];
+};
+
+function formatLessonDate(value: string) {
+  return new Date(value).toLocaleDateString("ru-RU", {
+    day: "2-digit", month: "long", timeZone: "Europe/Moscow",
+  });
+}
+
+function formatLessonTime(value: string) {
+  return new Date(value).toLocaleTimeString("ru-RU", {
+    hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow",
+  });
+}
+
+const DISMISSED_SUGGESTIONS_KEY = "smart-attendance.dismissed-suggestions";
+
+function getDismissedSuggestions(): number[] {
+  try {
+    const stored = localStorage.getItem(DISMISSED_SUGGESTIONS_KEY);
+    if (!stored) return [];
+
+    const parsed: unknown = JSON.parse(stored);
+
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (id): id is number =>
+            typeof id === "number" && Number.isSafeInteger(id)
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function Icon({
   type,
   size = 20,
@@ -145,6 +203,15 @@ export default function StudentPage() {
   const [groupName, setGroupName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [suggestions, setSuggestions] = useState<LessonSuggestion[]>([]);
+  const [suggestionsError, setSuggestionsError] = useState("");
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<number[]>(
+    () => getDismissedSuggestions()
+  );
+  const [availableLessons, setAvailableLessons] = useState<AvailableLesson[]>([]);
+  const [availableLessonsOpen, setAvailableLessonsOpen] = useState(false);
+  const [availableLessonsLoading, setAvailableLessonsLoading] = useState(false);
+  const [availableLessonsError, setAvailableLessonsError] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -248,6 +315,111 @@ export default function StudentPage() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    let controller: AbortController | null = null;
+
+    async function loadSuggestions() {
+      const token = getStudentToken();
+      if (!token) return;
+      controller?.abort();
+      controller = new AbortController();
+
+      try {
+        const response = await fetch(`${API_URL}/api/schedule/suggestions`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (response.status === 401 || response.status === 403) {
+          clearStudentToken();
+          window.location.replace("/student/login");
+          return;
+        }
+        if (!response.ok) throw new Error("Не удалось загрузить предложения расписания.");
+        const data: unknown = await response.json();
+        if (
+          typeof data !== "object" || data === null ||
+          !Array.isArray((data as { suggestions?: unknown }).suggestions)
+        ) throw new Error("Сервер вернул неверный формат предложений.");
+
+        const items = (data as { suggestions: LessonSuggestion[] }).suggestions;
+        if (active) {
+          setSuggestions(items.filter((item) => Date.parse(item.endsAt) > Date.now()));
+          setSuggestionsError("");
+        }
+      } catch (error) {
+        if (active && !(error instanceof DOMException && error.name === "AbortError")) {
+          setSuggestionsError(error instanceof Error ? error.message : "Ошибка загрузки предложений.");
+        }
+      }
+    }
+
+    void loadSuggestions();
+    const timer = window.setInterval(() => void loadSuggestions(), 60_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void loadSuggestions();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      active = false;
+      controller?.abort();
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
+
+  function dismissSuggestion(id: number) {
+    setDismissedSuggestions((current) => {
+      const next = current.includes(id) ? current : [...current, id];
+      try {
+        localStorage.setItem(DISMISSED_SUGGESTIONS_KEY, JSON.stringify(next));
+      } catch {
+        // Скрытие остаётся активным до перезагрузки страницы.
+      }
+      return next;
+    });
+  }
+
+  async function loadAvailableLessons() {
+    const token = getStudentToken();
+    if (!token) {
+      clearStudentToken();
+      window.location.replace("/student/login");
+      return;
+    }
+    setAvailableLessonsLoading(true);
+    setAvailableLessonsError("");
+    try {
+      const response = await fetch(`${API_URL}/api/schedule/available-lessons`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (response.status === 401 || response.status === 403) {
+        clearStudentToken();
+        window.location.replace("/student/login");
+        return;
+      }
+      const data: unknown = await response.json();
+      if (!response.ok) {
+        const message = typeof data === "object" && data !== null &&
+          typeof (data as { message?: unknown }).message === "string"
+          ? (data as { message: string }).message
+          : "Не удалось загрузить доступные занятия.";
+        throw new Error(message);
+      }
+      if (
+        typeof data !== "object" || data === null ||
+        !Array.isArray((data as { lessons?: unknown }).lessons)
+      ) throw new Error("Сервер вернул неверный формат доступных занятий.");
+      setAvailableLessons((data as { lessons: AvailableLesson[] }).lessons);
+    } catch (error) {
+      setAvailableLessonsError(error instanceof Error ? error.message : "Ошибка загрузки занятий.");
+    } finally {
+      setAvailableLessonsLoading(false);
+    }
+  }
+
   function handleLogout() {
     clearStudentToken();
     window.location.replace("/student/login");
@@ -345,6 +517,88 @@ export default function StudentPage() {
         </header>
 
         <div className="mb-4 h-px w-full bg-[#E5DFE9]" />
+
+        {suggestionsError && (
+          <p role="status" className="mb-3 rounded-lg border border-[#E8CACA] bg-[#FBF1F1] p-3 text-sm text-[#A54D4D]">
+            {suggestionsError}
+          </p>
+        )}
+
+        {suggestions.filter((item) => !dismissedSuggestions.includes(item.canonicalScheduleId)).length > 0 && (
+          <section aria-label="Предложения занятий" className="mb-4 rounded-xl border border-[#D8C5E8] bg-[#F8F4FA] p-4 sm:p-5">
+            <p className="text-[11px] font-bold tracking-[0.14em] text-[#8055A4]">СКОРО НАЧНУТСЯ</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {suggestions.filter((item) => !dismissedSuggestions.includes(item.canonicalScheduleId)).map((item) => (
+                <article key={item.canonicalScheduleId} className="relative rounded-lg border border-[#E2D5EC] bg-white p-3 pr-11">
+                  <button type="button" onClick={() => dismissSuggestion(item.canonicalScheduleId)}
+                    aria-label={`Скрыть предложение: ${item.discipline}`}
+                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-xl text-[#68636E] hover:bg-[#F3ECF8]">×</button>
+                  <h3 className="text-[16px] font-bold text-[#37323B]">{item.discipline}</h3>
+                  <p className="mt-1 text-[13px] text-[#68636E]">Преподаватель: {item.teacherName}</p>
+                  <p className="mt-1 text-[13px] text-[#68636E]">Группы: {item.groups.map((group) => group.name).join(", ") || "—"}</p>
+                  <p className="mt-1 text-[13px] text-[#68636E]">Аудитория: {item.classroom || "Не указана"}</p>
+                  <p className="mt-2 text-[13px] font-semibold text-[#8055A4]">
+                    {formatLessonDate(item.startsAt)} · {formatLessonTime(item.startsAt)}–{formatLessonTime(item.endsAt)}
+                  </p>
+                  <p className="mt-2 text-[11px] leading-4 text-[#817987]">
+                    Предложение из расписания. Выбрать пару для отметки можно после фактического начала занятия.
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="mb-4 rounded-xl border border-[#D8D2DD] bg-white p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[17px] font-bold text-[#37323B]">Выбрать другую пару</h2>
+              <p className="mt-1 text-[12px] text-[#68636E]">
+                Доступные занятия, включая гостевые допуски. Показываются только пары, которые уже идут.
+              </p>
+            </div>
+            <button type="button" onClick={() => {
+              const open = !availableLessonsOpen;
+              setAvailableLessonsOpen(open);
+              if (open) void loadAvailableLessons();
+            }} className="min-h-10 rounded-lg bg-[#343238] px-4 py-2 text-[13px] font-semibold text-white">
+              {availableLessonsOpen ? "Скрыть занятия" : "Показать занятия"}
+            </button>
+          </div>
+          {availableLessonsOpen && (
+            <div className="mt-4 border-t border-[#E5DFE9] pt-4">
+              {availableLessonsLoading ? (
+                <p role="status" className="text-sm text-[#68636E]">Загружаем доступные занятия…</p>
+              ) : availableLessonsError ? (
+                <p role="alert" className="text-sm text-[#A54D4D]">{availableLessonsError}</p>
+              ) : availableLessons.length === 0 ? (
+                <p className="text-sm text-[#68636E]">Сейчас нет доступных занятий. Попробуй обновить список позже.</p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {availableLessons.map((lesson) => {
+                    const room = lesson.classroom
+                      ? `${lesson.classroom.name}${lesson.classroom.building?.name ? `, ${lesson.classroom.building.name}` : ""}`
+                      : "Не указана";
+                    return (
+                      <article key={lesson.id} className="rounded-lg border border-[#E2D5EC] bg-[#FCFBFD] p-3">
+                        <h3 className="text-[15px] font-bold text-[#37323B]">{lesson.discipline}</h3>
+                        <p className="mt-1 text-[12px] text-[#68636E]">Группы: {lesson.groups.map((group) => group.name).join(", ") || "—"}</p>
+                        <p className="mt-1 text-[12px] text-[#68636E]">Аудитория: {room}</p>
+                        <p className="mt-1 text-[12px] font-semibold text-[#8055A4]">
+                          {formatLessonDate(lesson.startsAt)} · {formatLessonTime(lesson.startsAt)}–{formatLessonTime(lesson.endsAt)}
+                        </p>
+                        <Link href={`/student/attendance?lessonId=${lesson.id}`}
+                          className="mt-3 inline-flex min-h-10 items-center rounded-lg border border-[#D8C5E8] bg-[#F3ECF8] px-4 text-[12px] font-bold text-[#8055A4]">
+                          Выбрать эту пару
+                        </Link>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
 
         {/* Статистика посещаемости */}
         <section className="flex flex-col items-start">

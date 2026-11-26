@@ -125,9 +125,12 @@ export default function NewTeacherLessonPage() {
     classrooms: ClassroomReference[];
   } | null>(null);
 
+  const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
+
   const [loadError, setLoadError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [pending, setPending] = useState(false);
+  const [createdLessonId, setCreatedLessonId] = useState<number | null>(null);
   const [attempt, setAttempt] = useState(0);
   const submitting = useRef(false);
 
@@ -165,9 +168,11 @@ export default function NewTeacherLessonPage() {
 
     if (
       submitting.current ||
+      createdLessonId !== null ||
       !references?.groups.length ||
       !references.classrooms.length ||
-      !references.disciplines.length
+      !references.disciplines.length ||
+      selectedGroupIds.length === 0
     ) {
       return;
     }
@@ -180,11 +185,13 @@ export default function NewTeacherLessonPage() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
+    let saved = false;
     try {
       const id = await createLesson(
         {
           discipline: String(data.get("discipline")),
-          groupId: Number(data.get("groupId")),
+          groupId: selectedGroupIds[0],
+          groupIds: selectedGroupIds.slice(1),
           classroomId: Number(data.get("classroomId")),
           startsAt: String(data.get("startsAt")),
           endsAt: String(data.get("endsAt")),
@@ -192,8 +199,11 @@ export default function NewTeacherLessonPage() {
         controller.signal
       );
 
+      saved = true;
+      setCreatedLessonId(id);
       router.push(`/teacher/lessons/${id}`);
     } catch (cause) {
+      if (saved) return;
       setSubmitError(
         controller.signal.aborted || cause instanceof TypeError
           ? "Не удалось получить ответ сервера. Перед повторной отправкой проверьте «Мои занятия»: занятие могло сохраниться."
@@ -205,13 +215,18 @@ export default function NewTeacherLessonPage() {
       submitting.current = false;
       setPending(false);
     } finally {
+      setPending(false);
       clearTimeout(timeout);
     }
   }
 
   const empty =
     references &&
-    (!references.disciplines.length || !references.groups.length || !references.classrooms.length);
+    (
+      !references.disciplines.length ||
+      !references.groups.length ||
+      !references.classrooms.length
+    );
 
   return (
     <main
@@ -232,7 +247,7 @@ export default function NewTeacherLessonPage() {
             </h2>
 
             <p className="mt-2 max-w-2xl text-[13px] leading-6 text-[#68636E] sm:text-[14px]">
-              Заполните информацию о занятии, выберите учебную группу и
+              Заполните информацию о занятии, выберите учебные группы и
               аудиторию, а также укажите время проведения.
             </p>
           </div>
@@ -277,6 +292,12 @@ export default function NewTeacherLessonPage() {
             </div>
           )}
 
+          {createdLessonId !== null && <div role="status" className="mt-5 rounded-xl border border-[#CDE5D7] bg-[#F0FAF4] p-5 text-sm leading-6">
+            <p className="font-semibold">Занятие №{createdLessonId} создано.</p>
+            <p>Если страница не открылась автоматически, перейдите по ссылке:</p>
+            <a href={`/teacher/lessons/${createdLessonId}`} className="mt-2 inline-flex min-h-11 items-center font-semibold text-[#895BB2] underline underline-offset-2">Открыть занятие №{createdLessonId}</a>
+          </div>}
+
           <form
             onSubmit={submit}
             className="mt-5 rounded-xl border border-[#D8D2DD] bg-[#FCFBFD] p-5 sm:p-7"
@@ -296,7 +317,7 @@ export default function NewTeacherLessonPage() {
               </div>
             </div>
 
-            <fieldset disabled={pending} className="space-y-5">
+            <fieldset disabled={pending || createdLessonId !== null} className="space-y-5">
               <div className="grid gap-5 sm:grid-cols-2">
                 <FormField
                   id="discipline"
@@ -314,37 +335,67 @@ export default function NewTeacherLessonPage() {
                     <option value="" disabled>
                       Выберите дисциплину
                     </option>
-                    {references?.disciplines.map(({ id, name }) => (
-                      <option key={id} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-
-                <FormField
-                  id="groupId"
-                  label="Учебная группа"
-                  icon={<Icon type="group" size={18} />}
-                >
-                  <select
-                    id="groupId"
-                    name="groupId"
-                    required
-                    defaultValue=""
-                    disabled={!references?.groups.length}
-                    className={fieldStyle}
-                  >
-                    <option value="" disabled>
-                      Выберите группу
-                    </option>
-                    {references?.groups.map((item) => (
-                      <option key={item.id} value={item.id}>
+                    {references?.disciplines.map((item) => (
+                      <option key={item.id} value={item.name}>
                         {item.name}
                       </option>
                     ))}
                   </select>
                 </FormField>
+
+                <div>
+                  <div className={labelStyle}>
+                    <span className="flex items-center gap-2">
+                      <span className="text-[#A16FC5]">
+                        <Icon type="group" size={18} />
+                      </span>
+                      Учебные группы
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-[12px] text-[#68636E]">
+                    Выберите от одной до четырёх учебных групп для совместного занятия.
+                  </p>
+
+                  <div
+                    className="mt-2 max-h-52 space-y-2 overflow-y-auto rounded-lg border border-[#D8D2DD] bg-[#FCFBFD] p-3"
+                    aria-label="Учебные группы"
+                  >
+                    {references?.groups.map((item) => {
+                      const checked = selectedGroupIds.includes(item.id);
+                      const disabled =
+                        !checked && selectedGroupIds.length >= 4;
+
+                      return (
+                        <label
+                          key={item.id}
+                          className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-[14px] text-[#343238] hover:bg-[#F7F5F8]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={pending || disabled}
+                            onChange={() =>
+                              setSelectedGroupIds((current) =>
+                                checked
+                                  ? current.filter((id) => id !== item.id)
+                                  : current.length < 4
+                                    ? [...current, item.id]
+                                    : current
+                              )
+                            }
+                            className="h-4 w-4 accent-[#9B68BD]"
+                          />
+                          {item.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <p className="mt-1 text-[12px] text-[#68636E]">
+                    Выбрано: {selectedGroupIds.length}/4
+                  </p>
+                </div>
               </div>
 
               <FormField
@@ -365,7 +416,10 @@ export default function NewTeacherLessonPage() {
                   </option>
                   {references?.classrooms.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name}{item.building ? ` · ${item.building.name}` : " · Корпус не указан"}
+                      {item.name}
+                      {item.building
+                        ? ` · ${item.building.name}`
+                        : " · Корпус не указан"}
                     </option>
                   ))}
                 </select>
@@ -437,10 +491,18 @@ export default function NewTeacherLessonPage() {
 
                 <button
                   type="submit"
-                  disabled={pending || !references || Boolean(empty)}
+                  disabled={
+                    pending ||
+                    createdLessonId !== null ||
+                    !references ||
+                    Boolean(empty) ||
+                    selectedGroupIds.length === 0
+                  }
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#9B68BD] px-6 py-3 text-[14px] font-semibold text-white shadow-sm transition hover:bg-[#8958AC] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#A16FC5] disabled:cursor-not-allowed disabled:bg-[#E8E3EB] disabled:text-[#96909B]"
                 >
-                  {pending ? (
+                  {createdLessonId !== null ? (
+                    "Занятие создано"
+                  ) : pending ? (
                     "Создаём занятие…"
                   ) : (
                     <>
