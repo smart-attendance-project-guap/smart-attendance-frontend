@@ -179,7 +179,8 @@ export default function TeacherLoginPage() {
     try {
       await loginTeacher(
         String(form.get("email") ?? ""),
-        String(form.get("password") ?? "")
+        String(form.get("password") ?? ""),
+        form.get("remember") === "on"
       );
 
       window.location.replace("/teacher");
@@ -294,6 +295,17 @@ export default function TeacherLoginPage() {
                 </svg>
               </button>
             </div>
+          </div>
+
+          <div>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+              <input type="checkbox" name="remember" disabled={pending}
+                className="h-4 w-4 accent-[#9C68BC]" aria-describedby="remember-help" />
+              Запомнить меня
+            </label>
+            <p id="remember-help" className="text-xs leading-5 text-[#68636E]">
+              Вход сохранится в этом браузере до выхода из аккаунта или окончания сессии.
+            </p>
           </div>
 
           {error && (

@@ -72,12 +72,25 @@ export default function TeacherSession({
 
     void check();
 
+    function onStorage(event: StorageEvent) {
+      if (event.storageArea !== localStorage) return;
+      if ((event.key === "smart-attendance.teacher.token" && event.newValue === null) || event.key === null) {
+        clearTeacherToken();
+        window.location.replace("/teacher-login");
+      } else if (event.key === "smart-attendance.teacher.token") {
+        // A different remembered account was selected in another tab.
+        window.location.reload();
+      }
+    }
+
     window.addEventListener("focus", check);
+    window.addEventListener("storage", onStorage);
 
     return () => {
       active = false;
       current?.abort();
       window.removeEventListener("focus", check);
+      window.removeEventListener("storage", onStorage);
     };
   }, [attempt]);
 

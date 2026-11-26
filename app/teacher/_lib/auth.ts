@@ -4,14 +4,15 @@ export { API_URL };
 const TOKEN_KEY = "smart-attendance.teacher.token";
 
 export function getTeacherToken() {
-  return sessionStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function clearTeacherToken() {
   sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
 }
 
-export async function loginTeacher(email: string, password: string) {
+export async function loginTeacher(email: string, password: string, remember = false) {
   clearTeacherToken();
   const response = await fetch(`${API_URL}/api/auth/login`, {
     method: "POST",
@@ -29,7 +30,8 @@ export async function loginTeacher(email: string, password: string) {
   if (typeof data.token !== "string" || !data.token) {
     throw new Error("Сервер не вернул токен входа.");
   }
-  sessionStorage.setItem(TOKEN_KEY, data.token);
+  const storage = remember ? localStorage : sessionStorage;
+  storage.setItem(TOKEN_KEY, data.token);
 }
 
 export async function verifyTeacher(signal: AbortSignal) {
