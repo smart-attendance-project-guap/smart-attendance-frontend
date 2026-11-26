@@ -84,7 +84,9 @@ export default function LessonActions({ id, finishedAt, onFinished }: { id: numb
       </div>}
       {qrError && <p role="alert" className="mt-4 text-red-800">{qrError} Нажмите «Показать QR-код», чтобы повторить.</p>}
       {confirming && <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-        <p>Завершить занятие? После этого студенты не смогут отмечаться по QR-коду.</p>
+        <p className="font-semibold">Завершить занятие?</p>
+        <p className="mt-2">QR-код закроется, новые отметки станут недоступны. Результаты занятия сразу попадут в статистику и Excel.</p>
+        <p className="mt-2">Отметки, ожидающие проверки, можно будет подтвердить или отклонить после завершения.</p>
         <div className="mt-4 flex flex-wrap gap-3"><button disabled={finishing} className={buttonStyle} onClick={finish}>{finishing ? "Завершаем…" : "Да, завершить"}</button><button disabled={finishing} className={buttonStyle} onClick={() => setConfirming(false)}>Отмена</button></div>
       </div>}
       {finishError && <p role="alert" className="mt-4 text-red-800">{finishError}</p>}
