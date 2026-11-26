@@ -11,6 +11,7 @@ import {
   formatTime,
   getLessons,
   lessonStatus,
+  lessonGroupNames,
   type Lesson,
 } from "../_lib/lessons";
 
@@ -122,10 +123,10 @@ function LessonInfo({ lesson }: { lesson: Lesson }) {
       <div className="rounded-lg bg-[#F7F5F8] p-3">
         <dt className="flex items-center gap-2 text-[12px] text-[#68636E]">
           <Icon type="group" size={16} />
-          Группа
+          Группы
         </dt>
         <dd className="mt-1 text-[14px] font-semibold text-[#171717]">
-          {lesson.group.name}
+          {lessonGroupNames(lesson)}
         </dd>
       </div>
 

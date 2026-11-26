@@ -112,7 +112,7 @@ export default function TeacherStatisticsPanel() {
   const groups = data
     ? [
         ...new Map(
-          data.lessons.map((lesson) => [lesson.group.id, lesson.group]),
+          data.lessons.flatMap((lesson) => lesson.groupStats.map(group => [group.groupId, { id: group.groupId, name: group.groupName }] as const)),
         ).values(),
       ].sort((a, b) => a.name.localeCompare(b.name, "ru"))
     : [];
@@ -434,7 +434,7 @@ export default function TeacherStatisticsPanel() {
               </p>
             </div>
 
-            <AttendanceExport filters={filters} disabled={loading || Boolean(error)} />
+            <AttendanceExport filters={filters} lessons={data?.lessons ?? []} disabled={loading || Boolean(error)} />
 
             <div className="mt-4 border-t border-[#E9E3ED] pt-4">
               <p className={mutedText}>
@@ -590,7 +590,7 @@ export default function TeacherStatisticsPanel() {
                     <thead className="bg-[#F7F5F8] text-[#68636E]">
                       <tr>
                         {[
-                          "Группа",
+                          "Группы",
                           "Занятий",
                           "Ожидалось посещений",
                           "Подтверждено",
@@ -702,10 +702,10 @@ export default function TeacherStatisticsPanel() {
                             "Дисциплина",
                             lesson.discipline ?? "Без дисциплины",
                           ],
-                          ["Группа", lesson.group.name],
+                          ["Группы", lesson.groupStats.map(group => group.groupName).join(", ")],
                           ["Аудитория", lesson.classroom.name],
                           [
-                            "Студентов в группе",
+                            "Студентов групп",
                             number(lesson.totalStudents),
                           ],
                           [
@@ -738,9 +738,9 @@ export default function TeacherStatisticsPanel() {
                       <tr>
                         {[
                           "Занятие",
-                          "Группа",
+                          "Группы",
                           "Аудитория",
-                          "Студентов в группе",
+                          "Студентов групп",
                           "Присутствовали из групп",
                           "Посещаемость",
                         ].map((label) => (
@@ -787,7 +787,7 @@ export default function TeacherStatisticsPanel() {
                             </span>
                           </th>
 
-                          <td className={cell}>{lesson.group.name}</td>
+                          <td className={cell}>{lesson.groupStats.map(group => group.groupName).join(", ")}</td>
                           <td className={cell}>{lesson.classroom.name}</td>
                           <td className={cell}>
                             {number(lesson.totalStudents)}

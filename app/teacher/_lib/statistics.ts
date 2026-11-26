@@ -8,7 +8,9 @@ export type AttendanceTotals = {
 };
 export type TeacherSummary = AttendanceTotals & { totalLessons: number; guestAttendedStudents: number };
 export type GroupStatistics = Omit<TeacherSummary, "guestAttendedStudents"> & { groupId: number; groupName: string };
+export type LessonGroupStatistics = AttendanceTotals & { groupId: number; groupName: string };
 export type LessonStatistics = AttendanceTotals & {
+  groupStats: LessonGroupStatistics[];
   guestAttendedStudents: number;
   discipline?: string; lessonId: number; startsAt: string; endsAt: string;
   group: { id: number; name: string };
@@ -42,8 +44,12 @@ function date(value: unknown): value is string {
 function group(value: unknown): value is GroupStatistics {
   return record(value) && count(value.groupId) && value.groupId > 0 && typeof value.groupName === "string" && count(value.totalLessons) && totals(value);
 }
+function lessonGroup(value: unknown): value is LessonGroupStatistics {
+  return record(value) && reference({ id: value.groupId, name: value.groupName }) && totals(value);
+}
 function lesson(value: unknown): value is LessonStatistics {
   return record(value) && count(value.lessonId) && value.lessonId > 0
+    && Array.isArray(value.groupStats) && value.groupStats.length > 0 && value.groupStats.every(lessonGroup)
     && count(value.guestAttendedStudents) && date(value.startsAt) && date(value.endsAt) && reference(value.group) && reference(value.classroom) && totals(value);
 }
 
@@ -67,7 +73,7 @@ export async function getTeacherStatistics(signal: AbortSignal): Promise<Teacher
   ]);
   if (!summary(overall) || !record(byGroup) || !Array.isArray(byGroup.stats) || !byGroup.stats.every(group)
     || !record(byLesson) || !Array.isArray(byLesson.stats) || !byLesson.stats.every(lesson)) {
-    throw new Error("Сервер вернул неверный формат статистики. Проверьте, что Backend обновлён и поддерживает отдельный учёт гостей.");
+    throw new Error("Сервер вернул неверный формат статистики. Проверьте, что Backend обновлён и поддерживает groupStats для общих занятий.");
   }
   return {
     summary: overall,
@@ -93,9 +99,15 @@ export function filterTeacherStatistics(data: TeacherStatistics, filters: Statis
   if (!Object.values(filters).some(Boolean)) return data;
   const lessons = filters.from && filters.to && filters.from > filters.to ? [] : data.lessons.filter(lesson => {
     const day = localDateKey(new Date(lesson.startsAt));
-    return (!filters.groupId || String(lesson.group.id) === filters.groupId)
+    return (!filters.groupId || lesson.groupStats.some(group => String(group.groupId) === filters.groupId))
       && (!filters.discipline || lesson.discipline === filters.discipline)
       && (!filters.from || day >= filters.from) && (!filters.to || day <= filters.to);
+  }).map(lesson => {
+    if (!filters.groupId) return lesson;
+    const selected = lesson.groupStats.find(group => String(group.groupId) === filters.groupId)!;
+    return { ...lesson, totalStudents: selected.totalStudents, attendedStudents: selected.attendedStudents,
+      attendancePercentage: selected.attendancePercentage,
+      groupStats: [selected] };
   });
   const summary: TeacherSummary = { totalLessons: lessons.length, totalStudents: 0, attendedStudents: 0, guestAttendedStudents: 0, attendancePercentage: 0 };
   const groups = new Map<number, GroupStatistics>();
@@ -103,11 +115,13 @@ export function filterTeacherStatistics(data: TeacherStatistics, filters: Statis
     summary.totalStudents += lesson.totalStudents;
     summary.attendedStudents += lesson.attendedStudents;
     summary.guestAttendedStudents += lesson.guestAttendedStudents;
-    const group = groups.get(lesson.group.id) ?? { groupId: lesson.group.id, groupName: lesson.group.name, totalLessons: 0, totalStudents: 0, attendedStudents: 0, attendancePercentage: 0 };
-    group.totalLessons++;
-    group.totalStudents += lesson.totalStudents;
-    group.attendedStudents += lesson.attendedStudents;
-    groups.set(group.groupId, group);
+    for (const item of lesson.groupStats) {
+      const group = groups.get(item.groupId) ?? { groupId: item.groupId, groupName: item.groupName, totalLessons: 0, totalStudents: 0, attendedStudents: 0, attendancePercentage: 0 };
+      group.totalLessons++;
+      group.totalStudents += item.totalStudents;
+      group.attendedStudents += item.attendedStudents;
+      groups.set(group.groupId, group);
+    }
   }
   const rate = (totals: AttendanceTotals) => totals.totalStudents ? Number((totals.attendedStudents / totals.totalStudents * 100).toFixed(2)) : 0;
   summary.attendancePercentage = rate(summary);

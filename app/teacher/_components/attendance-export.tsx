@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { exportValidation, fetchAttendanceWorkbook } from "../_lib/export-attendance";
-import type { StatisticsFilters } from "../_lib/statistics";
+import { automaticExportPeriod, exportValidation, fetchAttendanceWorkbook } from "../_lib/export-attendance";
+import type { LessonStatistics, StatisticsFilters } from "../_lib/statistics";
 
-export default function AttendanceExport({ filters, disabled }: { filters: StatisticsFilters; disabled: boolean }) {
+export default function AttendanceExport({ filters, lessons, disabled }: { filters: StatisticsFilters; lessons: LessonStatistics[]; disabled: boolean }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [failed, setFailed] = useState(false);
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => { request.current?.abort(); request.current = null; }, []);
-  const validation = exportValidation(filters);
+  const effectiveFilters = automaticExportPeriod(filters, lessons);
+  const validation = exportValidation(effectiveFilters);
 
   async function download() {
     if (request.current || disabled || validation) return;
@@ -18,7 +19,7 @@ export default function AttendanceExport({ filters, disabled }: { filters: Stati
     request.current = controller;
     setBusy(true); setNotice(""); setFailed(false);
     const timeout = setTimeout(() => controller.abort(), 60000);
-    const snapshot = { ...filters };
+    const snapshot = { ...effectiveFilters };
     try {
       const blob = await fetchAttendanceWorkbook(snapshot, controller.signal);
       if (request.current !== controller) return;
@@ -46,7 +47,11 @@ export default function AttendanceExport({ filters, disabled }: { filters: Stati
       className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#D8D2DD] bg-white px-4 py-2 text-sm font-semibold text-[#514B56] hover:bg-[#F7F3FA] disabled:cursor-not-allowed disabled:opacity-50">
       {busy ? "Готовим Excel…" : "Скачать Excel"}
     </button>
-    <p className="mt-2 text-xs leading-5 text-[#68636E]">{validation || "Журнал выбранной группы и дисциплины. Даты в Excel — по московскому времени. Максимальный период — 180 дней."}</p>
+    <p className="mt-2 text-xs leading-5 text-[#68636E]">{validation || "Журнал выбранной группы и дисциплины. Даты в Excel — по московскому времени."}</p>
+    {!validation && <p className="mt-1 text-xs leading-5 text-[#68636E]">
+      Период отчёта: {effectiveFilters.from.split("-").reverse().join(".")} — {effectiveFilters.to.split("-").reverse().join(".")}.
+      {(!filters.from || !filters.to) && " Определён автоматически по занятиям. Для другого периода измените даты выше."}
+    </p>}
     {notice && <p role={failed ? "alert" : "status"} className={`mt-2 text-sm ${failed ? "text-red-800" : "text-[#514B56]"}`}>{notice}</p>}
   </div>;
 }

@@ -1,10 +1,22 @@
 import { API_URL, clearTeacherToken, getTeacherToken } from "./auth";
-import type { StatisticsFilters } from "./statistics";
+import type { LessonStatistics, StatisticsFilters } from "./statistics";
+
+export function automaticExportPeriod(filters: StatisticsFilters, lessons: LessonStatistics[]): StatisticsFilters {
+  const days = lessons.filter(lesson => lesson.discipline === filters.discipline
+    && lesson.groupStats.some(group => String(group.groupId) === filters.groupId))
+    .map(lesson => {
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(lesson.startsAt));
+      const part = (type: string) => parts.find(item => item.type === type)!.value;
+      return `${part("year")}-${part("month")}-${part("day")}`;
+    }).sort();
+  return { ...filters, from: filters.from || days[0] || "", to: filters.to || days.at(-1) || "" };
+}
 
 export function exportValidation(filters: StatisticsFilters): string {
-  if (!/^[1-9]\d*$/.test(filters.groupId) || !filters.discipline.trim() || !filters.from || !filters.to) {
-    return "Для Excel выберите одну группу, дисциплину и обе даты периода.";
+  if (!/^[1-9]\d*$/.test(filters.groupId) || !filters.discipline.trim()) {
+    return "Для Excel выберите группу и дисциплину. Период определится автоматически.";
   }
+  if (!filters.from || !filters.to) return "Нет завершённых занятий для определения периода. Выберите даты вручную.";
   const dates = [filters.from, filters.to].map(value => new Date(`${value}T00:00:00Z`));
   if (dates.some((date, index) => !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== [filters.from, filters.to][index])) {
     return "Укажите корректные даты периода.";

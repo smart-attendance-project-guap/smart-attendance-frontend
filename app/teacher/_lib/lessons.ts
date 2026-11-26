@@ -7,6 +7,7 @@ export type Lesson = {
   endsAt: string;
   finishedAt: string | null;
   group: { id: number; name: string };
+  lessonGroups?: { group: { id: number; name: string } }[];
   classroom: { id: number; name: string };
 };
 
@@ -40,4 +41,9 @@ export function lessonStatus(lesson: Lesson, now: number) {
 export function formatDate(value: string) { return new Date(value).toLocaleDateString("ru-RU"); }
 export function formatTime(value: string) {
   return new Date(value).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+export function lessonGroupNames(lesson: Lesson): string {
+  const groups = [lesson.group, ...(lesson.lessonGroups ?? []).map(item => item.group)];
+  return [...new Map(groups.map(group => [group.id, group.name])).values()].join(", ");
 }

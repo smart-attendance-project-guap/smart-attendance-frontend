@@ -16,6 +16,15 @@ async function request(path: string, signal: AbortSignal, body?: LessonInput) {
     clearTeacherToken(); window.location.replace("/teacher-login"); throw new Error("Войдите в кабинет преподавателя.");
   }
   if (!response.ok) {
+    if (body && response.status === 409) {
+      const data = await response.json().catch(() => null);
+      const messages: Record<string, string> = {
+        "Classroom is already occupied at this time": "Аудитория уже занята на выбранное время. Выберите другую аудиторию или время.",
+        "Group already has a lesson at this time": "У группы уже есть занятие на выбранное время. Выберите другое время.",
+        "Teacher already has a lesson at this time": "У вас уже есть занятие на выбранное время. Выберите другое время.",
+      };
+      throw new Error(messages[data?.message] ?? "В выбранное время есть пересечение с другим занятием. Проверьте группу, аудиторию и время.");
+    }
     if (body && response.status === 404) throw new Error("Группа или аудитория больше не найдена. Обновите страницу и выберите их заново.");
     if (body && response.status === 400) throw new Error("Проверьте дисциплину, группу, аудиторию и время занятия.");
     throw new Error(body ? "Не удалось создать занятие. Проверьте список занятий перед повторной отправкой." : "Не удалось загрузить дисциплины, группы и аудитории.");
