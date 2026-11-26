@@ -4,6 +4,7 @@
 import Link from "next/link";
 import LessonActions from "./lesson-actions";
 import LessonAttendance from "./lesson-attendance";
+import LessonGuests from "./lesson-guests";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   formatDate,
@@ -322,6 +323,12 @@ export default function LessonBrowser({ lessonId }: { lessonId?: string }) {
                         : current
                     )
                   }
+                />
+
+                <LessonGuests
+                  key={`guests-${lesson.id}`}
+                  lessonId={lesson.id}
+                  closed={Boolean(lesson.finishedAt) || Date.parse(lesson.endsAt) <= result.now}
                 />
 
                 <LessonAttendance
