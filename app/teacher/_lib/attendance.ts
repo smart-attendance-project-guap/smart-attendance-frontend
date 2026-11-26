@@ -6,7 +6,7 @@ export type Attendance = {
   isGuest: boolean; markedAt: string; reviewed: boolean; faceChecked: boolean; deviceChecked: boolean;
   locationChecked: boolean; rejectionReason: string | null; student: Student;
 };
-export type AttendanceRow = { student: Student; attendance: Attendance | null };
+export type AttendanceRow = { student: Student; attendance: Attendance | null; isAbsent?: boolean };
 
 async function request(path: string, signal: AbortSignal, action?: "approve" | "reject", reason?: string) {
   const token = getTeacherToken();
@@ -24,7 +24,7 @@ async function request(path: string, signal: AbortSignal, action?: "approve" | "
   return response.json();
 }
 
-// absentStudents включает PENDING и REJECTED: объединяем по ID без повторных строк.
+// Объединяем отметки и студентов без отметки по ID без повторных строк.
 export function mergeAttendance(attendances: Attendance[], absentStudents: Student[]): AttendanceRow[] {
   const rows = new Map<number, AttendanceRow>();
   for (const student of absentStudents) rows.set(student.id, { student, attendance: null });
@@ -36,10 +36,13 @@ export async function getAttendance(lessonId: number, signal: AbortSignal): Prom
   const data = await request(`lesson/${lessonId}`, signal);
   const studentValid = (s: Student) => s && Number.isInteger(s.id) && typeof s.firstName === "string" && typeof s.lastName === "string" && typeof s.email === "string";
   if (data.lessonId !== lessonId || !Array.isArray(data.attendances) || !Array.isArray(data.absentStudents)
-    || !data.absentStudents.every(studentValid) || !data.attendances.every((a: Attendance) => a && Number.isInteger(a.id) && a.studentId === a.student?.id && studentValid(a.student) && ["PENDING", "PRESENT", "LATE", "REJECTED"].includes(a.status) && typeof a.reviewed === "boolean" && typeof a.isGuest === "boolean" && [a.faceChecked, a.deviceChecked, a.locationChecked].every(v => typeof v === "boolean") && Number.isFinite(Date.parse(a.markedAt)))) {
+    || !Array.isArray(data.unmarkedStudents) || typeof data.attendanceFinalized !== "boolean"
+    || !data.unmarkedStudents.every(studentValid) || !data.absentStudents.every(studentValid) || !data.attendances.every((a: Attendance) => a && Number.isInteger(a.id) && a.studentId === a.student?.id && studentValid(a.student) && ["PENDING", "PRESENT", "LATE", "REJECTED"].includes(a.status) && typeof a.reviewed === "boolean" && typeof a.isGuest === "boolean" && [a.faceChecked, a.deviceChecked, a.locationChecked].every(v => typeof v === "boolean") && Number.isFinite(Date.parse(a.markedAt)))) {
     throw new Error("Не удалось прочитать данные посещаемости сервера.");
   }
-  return mergeAttendance(data.attendances, data.absentStudents);
+  const absentIds = new Set<number>(data.absentStudents.map((student: Student) => student.id));
+  return mergeAttendance(data.attendances, [...data.absentStudents, ...data.unmarkedStudents])
+    .map(row => ({ ...row, isAbsent: !row.attendance && data.attendanceFinalized && absentIds.has(row.student.id) }));
 }
 
 export async function reviewAttendance(id: number, action: "approve" | "reject", signal: AbortSignal, reason = "") {

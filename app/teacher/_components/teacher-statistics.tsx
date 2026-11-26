@@ -501,7 +501,7 @@ export default function TeacherStatisticsPanel() {
             <p className="mt-4 rounded-xl bg-[#F7F5F8] px-4 py-3 text-xs leading-5 text-[#77717C]">
               Один студент на двух занятиях — два ожидаемых посещения.
               Подтверждённые посещения включают опоздания. Численность берётся
-              из текущего состава групп. Гости учитываются отдельно и не меняют процент посещаемости групп.
+              из текущего состава групп. До планового конца пары отсутствие отметки не считается пропуском. Ожидающие проверки отметки не считаются пропусками. Гости учитываются отдельно и не меняют процент посещаемости групп.
             </p>
           </section>
 
@@ -713,6 +713,9 @@ export default function TeacherStatisticsPanel() {
                             number(lesson.attendedStudents),
                           ],
                           ["Посещаемость групп", percentage(lesson)],
+                          ["Нет отметки", number(lesson.groupStats.reduce((sum, group) => sum + group.unmarkedStudents, 0))],
+                          ["Ожидают проверки", number(lesson.groupStats.reduce((sum, group) => sum + group.pendingStudents, 0))],
+                          ["Пропуски", number(lesson.groupStats.reduce((sum, group) => sum + group.missedStudents, 0))],
                         ].map(([label, value]) => (
                           <div key={label} className="min-w-0">
                             <dt className="text-xs leading-5 text-[#8A8490]">
@@ -794,6 +797,9 @@ export default function TeacherStatisticsPanel() {
                           </td>
                           <td className={cell}>
                             {number(lesson.attendedStudents)} из {number(lesson.totalStudents)}
+                            <span className="mt-1 block text-xs text-[#68636E]">
+                              Нет отметки: {number(lesson.groupStats.reduce((sum, group) => sum + group.unmarkedStudents, 0))}; на проверке: {number(lesson.groupStats.reduce((sum, group) => sum + group.pendingStudents, 0))}; пропуски: {number(lesson.groupStats.reduce((sum, group) => sum + group.missedStudents, 0))}.
+                            </span>
                           </td>
                           <td
                             className={`${cell} font-semibold text-[#8958AC]`}

@@ -8,8 +8,9 @@ export type AttendanceTotals = {
 };
 export type TeacherSummary = AttendanceTotals & { totalLessons: number; guestAttendedStudents: number };
 export type GroupStatistics = Omit<TeacherSummary, "guestAttendedStudents"> & { groupId: number; groupName: string };
-export type LessonGroupStatistics = AttendanceTotals & { groupId: number; groupName: string };
+export type LessonGroupStatistics = AttendanceTotals & { groupId: number; groupName: string; pendingStudents: number; rejectedStudents: number; unmarkedStudents: number; missedStudents: number };
 export type LessonStatistics = AttendanceTotals & {
+  attendanceFinalized: boolean;
   groupStats: LessonGroupStatistics[];
   guestAttendedStudents: number;
   discipline?: string; lessonId: number; startsAt: string; endsAt: string;
@@ -45,10 +46,11 @@ function group(value: unknown): value is GroupStatistics {
   return record(value) && count(value.groupId) && value.groupId > 0 && typeof value.groupName === "string" && count(value.totalLessons) && totals(value);
 }
 function lessonGroup(value: unknown): value is LessonGroupStatistics {
-  return record(value) && reference({ id: value.groupId, name: value.groupName }) && totals(value);
+  return record(value) && reference({ id: value.groupId, name: value.groupName })
+    && [value.pendingStudents, value.rejectedStudents, value.unmarkedStudents, value.missedStudents].every(count) && totals(value);
 }
 function lesson(value: unknown): value is LessonStatistics {
-  return record(value) && count(value.lessonId) && value.lessonId > 0
+  return record(value) && typeof value.attendanceFinalized === "boolean" && count(value.lessonId) && value.lessonId > 0
     && Array.isArray(value.groupStats) && value.groupStats.length > 0 && value.groupStats.every(lessonGroup)
     && count(value.guestAttendedStudents) && date(value.startsAt) && date(value.endsAt) && reference(value.group) && reference(value.classroom) && totals(value);
 }
